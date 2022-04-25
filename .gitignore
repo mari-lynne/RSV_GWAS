@@ -37,3 +37,15 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# Text files
+.txt
+.csv
+.fam
+.ped
+.map
+.bim
+.bed
+
+# RMD Output
+.html
