@@ -25,7 +25,8 @@ git branch user_dev #user_dev will be your new branch for developing code\
 git checkout user_dev
 
 - Within your branch you can pull from main and edit/add scripts (commit regularly).
-- When happy with changes merge your branch to main 
+- When happy with changes merge your branch to main
+- **Always pull** at the start of your session in case another user has added anything new to main
 
 # Directories
 
