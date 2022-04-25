@@ -109,32 +109,6 @@ D0eqtl <- (me$trans$eqtls)
 #Day0 summary:
 D0eqtl <- filter(D0eqtl, pvalue<=0.05)
 
-
-#chr1:161649850:G:A FCGR1B 0.02054772
-#-0.3196624 #more of this snp = less FcGR1B expression 
-#1.51775 SNP susceptibility to TD
-
-#So individuals with this SNP were found to have 1.5x higher risk of typhoid fever
-#They were also more likely to have lower expression of FcGR1b
-#FcGr1b is siginificantly lower in those who get typhoid versus those who don't at day 1
-#And then proceeds to increase significantly during infection
-#(This isn't an inhibitory receptor see table!)
-
-
-
-
-
-#TD Summary:
-#chr1:161594882:T:C SNP p=0.03 sig association with changes in FCRLA expression -0.5b
-#A negative sign indicates that as the predictor variable increases, the response variable decreases.
-#So copies of this snp 1/2 were associated with a decrease in FCRLA expression
-#Lower expression of FCRLA was associated with D0 
-#SNP had an OR of 0.54 #associated w protection
-#quite a weak result, doesn't really add up
-#This is only looking at D0 individuals though
-
-
-
 ## Make the histogram of local and distant p-values
 plot(me)
 
