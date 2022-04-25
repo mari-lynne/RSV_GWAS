@@ -1,0 +1,142 @@
+---
+title: "RSV GWAS"
+output:
+  html_document:
+    df_print: paged
+---
+### Background
+
+- Infant case control study of RSV infection (n=325)
+- https://resc-eu.org/ 
+
+
+### Aims
+
+- Pre-process data in Plink for imputation using Topmed server
+- Following imputation and a second round of QC associate infant genotype with the probablity of RSV infection and symptom severity (Resvinet score)
+- Investigate 'top hits' at a genome-wide level, in addition to investigating candidate genes of interest
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = '~/RSV/plink') #Chenge eval to false when knitting
+```
+
+#### Inital QC steps
+
+```{bash QC, eval = TRUE}
+plink2 --bfile rsv --geno 0.1 --mind 0.1 --hwe 0.000001 --make-bed --out rsv_QC 
+plink2 --bfile rsv_QC --geno 0.05 --make-bed --out rsv_QC2
+
+#filter for maf (rare snps later when doing association testing --maf 0.01 (10%))
+#1 individual removed due to missing data
+
+#Add Sex check plink2 --bfile rsv_QC2 --check-sex --make-bed --out rsv_QC2
+```
+
+### R Quality Control Steps
+
+- Remove Duplicates
+- Check for AT > CG SNPs
+- Filter for Autosomal Chromosomes
+- Align to reference genome
+
+```{r, echo=FALSE}
+#Load R packages:
+
+library(data.table)
+library(stringr)
+library(dplyr)
+library(tidylog)
+library(stringi)
+```
+
+
+```{r rsv file cleaning}
+#Load SNP info
+bim <-fread("rsv_QC2.bim")
+#Filter SNPs in autosomal chromosomes")
+non_auto <- bim %>% filter(V1 == "Y" | V1 == "XY")
+
+#Remove duplicates 
+duplicated_snps <- bim[duplicated(paste(bim$V1,bim$V4)),]
+#remove snps where A > T, C > G
+#PLINK can't tell what strand to merge/read these SNPs from
+atcg_snps <-  bim[((bim$V5 == "A") & (bim$V6 == "T")) |
+                         ((bim$V5 == "T") & (bim$V6 == "A")) |
+                         ((bim$V5 == "C") & (bim$V6 == "G")) |
+                         ((bim$V5 == "G") & (bim$V6 == "C"))]
+#Exclusion list
+exclude <- rbind(non_auto, duplicated_snps, atcg_snps)
+exclude <- exclude$V2
+write.table(file="exclude_snps_rm.txt", exclude, sep = "\t", quote=F, row.names = F, col.names = F)
+system("plink --bfile rsv_QC2 --exclude exclude_snps_rm.txt --make-bed --out rsv_QC3")
+
+```
+
+#### Update Annotation Files
+
+Very conviently different arrays use different annotations\
+Therefore need to update SNP names in R/Plink for later comparisons
+Gathered annotation file from https://www.thermofisher.com/uk/en/home/life-science/microarray-analysis/microarray-data-analysis/genechip-array-annotation-files.html
+
+```{r}
+bim <-fread("rsv_QC3.bim")
+
+annot<-fread("Axiom_APMRA.na35.annotation.csv")
+
+names(bim) <- c("V1", "Probe Set ID", "V3", "V4","V5", "V6")
+library(tidylog)
+annot_bim <- left_join(annot, bim, by = "Probe Set ID") 
+#only matched 340, 600 SNPs, could be due to lack of rsIDs
+#When we convert to VCF this = chr:bp:SNP anyways so we can convert to rsID after that I think
+```
+
+#### Liftover:
+
+Data is in GChr37 build. Use UCSC Liftover to update to 38 build.
+
+```{bash Liftover}
+
+awk '{print "chr" $1, $4 -1, $4, $2 }' rsv_QC3.bim > rsv_lift.txt
+
+#Successfully converted 801993 records: View Conversions
+#Conversion failed on 31746 records.
+```
+Update Bim file with liftover SNPs
+```{bash update liftover resulst}
+
+# extract mapped variants snp IDs
+awk '{print $4}' 38_lift.bed > rsv_38_rm.snps
+# extract updated positions
+awk '{print $4, $3}' 38_lift.bed > rsv_38_rm.pos
+#update plink file with SNPs that we could extract, and update the snp coordinates using update map function
+plink2 --bfile rsv_QC3 --make-pgen --out rsv
+plink2 --pfile rsv --extract rsv_38_rm.snps --update-map rsv_38_rm.pos --sort-vars --make-pgen --out rsv_remap
+plink2 --pfile rsv_remap --make-bed --out rsv_remap #bfile version
+
+```
+
+#### Alignment to reference genome
+
+Before we can merge/impute studies, we need to check for strand inconsistencies
+The best way to do this is to compare to a reference genome
+Plink offers a flip-scan option
+But will instead use the perl tool from Will Rayner
+Estimates possible flips by looking at overal LD, if suddenly a SNP is not in LD when it should be, very likely that that SNP has been incorrectly aligned.
+Generate TOPMED38 vcf.gz file to use and tabulate using bcftools
+
+```{bash Alignment to ref genome}
+cd ~/RSV/plink/topmed
+plink2 --bfile  rsv_remap --freq --out rsv_remap
+perl pre_impute.pl -b rsv_remap.bim -f rsv_remap.afreq -r PASS.VariantsTOPMED38.tab.gz -h
+
+bash Run-plink.sh
+```
+
+```{bash Format for topmed}
+
+cd ~/RSV/plink/topmed
+bash topmed_prep.sh
+
+```
+

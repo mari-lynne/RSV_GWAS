@@ -1,0 +1,150 @@
+---
+title: "SNP Annotation"
+output:
+  html_document:
+    df_print: paged
+---
+---
+title: "SNP Annotation"
+author: "Mari Johnson"
+date: "23/03/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE, root.dir = 'home/mari/RSV/post-imp/Assoc')
+```
+
+### Aims
+
+- Upload SNP list to SNPNexus/VEP
+- Results in various annotation files
+- Download snp annotation results as .txt files and read into R 
+- For candidate gene analysis prioritise and filter SNPs with gtex tissue expression, coding snps etc.
+
+##### Load Packages:
+```{r Packages}
+library(data.table)
+library(tidylog)
+library(dplyr)
+library(stringr)
+```
+#### Write nexus snp list
+
+Upload data to SNP nexus to get genome annotation https://www.snp-nexus.org/v4/
+```{r format Nexus snp list}
+tophits <- fread("tophits.txt")
+nexus <- select(tophits, CHR, BP, REF, ALT) #957
+nexus <- mutate(nexus, strand = rep(1, 947))
+nexus <- mutate(nexus, Type = rep("Chromosome", 947))
+nexus <- select(nexus, Type, CHR, BP, REF, ALT, strand)
+
+names(nexus) <- c("Type","Id","Position","Alelle1","Allele2","Strand")
+
+write.table(nexus, "nexus.txt", row.names = F, col.names = F, quote = F, sep = " ")
+#Then need to find what these snps are in LD with
+```
+#### Read nexus .txt files into R
+```{r Read in Annotation data}
+
+#Read in data
+temp = list.files(pattern="*.txt")
+myfiles = lapply(temp, fread)
+#add names to files  - names(myfiles) <- temp
+trim <- str_extract(temp, ".{4,}?")
+names(myfiles) <- trim
+#Unlist files
+list2env((myfiles), envir = .GlobalEnv)
+```
+#### Format Annotation Data
+```{r Format Annotation data}
+#ID file ####
+ID <- gen_ #contains file of nearest gene to the snps
+rm(gen_)
+ID <- ID[,1:8]
+
+#Predicted ensembl function ####
+ense <- ense %>% dplyr::select(`Variation ID`, Variant, Symbol, `Predicted Function`) %>% distinct()
+#Lots of duplicate entries due to contigs I think
+no_introns <- ense %>% filter(`Predicted Function` != "intronic")
+
+introns <- ense %>% filter(str_detect(ense$`Predicted Function`, "intron"))
+no_introns <- ense %>% filter(!str_detect(ense$`Predicted Function`, "intron"))
+#517 intron SNPs #110 non-intron SNPs
+
+#collapse by ense by ID
+functions <- ense %>%
+  group_by(`Variation ID`, Variant, Symbol) %>%
+  summarise(`Predicted Function` = toString(`Predicted Function`))
+main <- full_join(ID, functions, by = "Variation ID")
+#Matched 485 rows
+
+#Regulatory Elements ####
+#reg elements downloaded from roadmap project via snpnexus 
+rm(road)
+road <- fread("roadmap.txt")
+str(road)
+road$Epigenome <- as.factor(road$Epigenome)
+levels(road$Epigenome)
+#Contains many tissue eQTLs, #Filter for immune and lung tissue expression
+epi <- road %>% filter(str_detect(road$Epigenome, "B cell|CD4|CD8|T cell|Monocyte|Neutrophil|myeloid|Natural Killer|Spleen|macrophage|lung|esophagus"))
+#Collapse by SNP
+epi <- epi %>%
+  group_by(`Variation ID`, Chromosome, `Feature Type Class`, `Feature Type`) %>%
+  summarise(Epigenome = toString(Epigenome))
+#cat Feature Type and Epigenome to one column
+epi <- epi %>% group_by(`Variation ID`, Chromosome, `Feature Type Class`) %>% mutate(Epigenome_Feature = paste(`Feature Type`, `Epigenome`, sep = ": ")) %>% select(-`Feature Type`, -Epigenome)
+main <- full_join(main, epi, by = "Variation ID")
+
+#Polyphen ####
+poly <- poly %>% select(`Variation ID`, Score, Prediction)
+main <- full_join(main, poly, by = "Variation ID")
+main <- main[order(Score),]
+
+#GWAS public data ####
+gwas <- gwas%>% select(-`Risk Allele`, -Region, -Platform)
+main <- full_join(main, gwas, by = "Variation ID")
+main <- distinct(main)
+
+#Glm association results ####
+assoc <- toph %>% select(CHR,BP,SNP,BETA,SE,P) %>% rename(Chromosome.x = CHR, Position = BP)
+main <- left_join(assoc, main, by = c("Chromosome.x","Position"))
+
+#Clean table
+main <- main %>% rename(CHR=Chromosome.x) %>% select(-Chromosome.y,-Chromosome,-`Variation ID`)
+write.csv(main, file = "GWAS_summary.data.csv", row.names = F)
+```
+
+#### Results:
+##### Notes so far:
+
+**Pathway Analysis**\
+- https://www.snp-nexus.org/v4/reacfoam/8d91878c/\
+- CDC42 SNP! RSV uses CDC42 (like HIV) for viral entry\
+- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\
+- CDC42/Rac1 (Rho GTPases - actin remodelling) inhibitors sig reduced viral load\
+- https://www.nature.com/articles/s42003-021-02754-2/figures/7\
+
+**Public GWAS hits**\
+- chr11:1852991:C/T:1	Monocyte count rs907612\
+- chr11:1852842:G/A:1	Lymphocyte counts	3E-10	rs907611 - increase in LRT1 receptor (lymphocyte trafficking receptor in lungs)\
+- LRT1 This gene encodes an intracellular F-actin binding protein. The protein is expressed in lymphocytes, neutrophils, macrophages, and endothelium and may regulate neutrophil motility, adhesion to fibrinogen matrix proteins, and transendothelial migration
+May play a role in mediating neutrophil activation and chemotaxis. LSP1_HUMAN,P33241
+
+
+
+```{r gtEX, echo = FALSE}
+#query for whole blood
+```
+
+```{r Joining tables, echo=FALSE}
+#Join all of the annotation tables by their snp rs - Variation ID
+#., allows you to pipe in previous table from left join
+annote <- left_join(ense2, ID, by = "Variation ID") %>%
+    left_join(.,cadd, by = "Variation ID") %>%
+  left_join(., funs, by = "Variation ID") %>%
+  select(-ends_with(".y")) %>% select(-ends_with(".x")) #clean names
+gwas_hits <- left_join(gwas, annote, by ="Variation ID")
+#chr1:161630802:A/G:1
+```
+#
