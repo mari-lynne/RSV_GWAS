@@ -6,7 +6,8 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, root.dir = 'home/mari/RSV/post-imp')
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = 'home/mari/RSV/data/post-imp/Assoc')
 ```
 
 ### Concatenation
@@ -133,6 +134,12 @@ tophits <- filter(gwas, P < 10e-5)
 head(tophits)
 #Write top hits file 
 write.table(tophits, file = "Assoc/tophits.txt", quote = F, row.names= F, sep = "\t")
+```
+```{bash CD14 association}
+plink2 --pfile RSV_Oxford --chr 5 --from-bp 140630856 --to-bp 140634071 --pheno pheno.txt --pheno-name RESV_total_score --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out CD14_
+```
+```{r CD14 results}
+
 ```
 
 
