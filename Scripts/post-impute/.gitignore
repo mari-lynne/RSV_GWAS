@@ -1,2 +1,3 @@
 *.log
 deleted_script_sections.sh
+relatedness_check.R
