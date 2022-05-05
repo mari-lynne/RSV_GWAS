@@ -36,32 +36,44 @@ plink \
 
 
 plink \
---bfile rsv_sex \
+--bfile rsv_sex_chr \
 --exclude exclude_snps_xy.txt \
 --make-bed \
 --out rsv_sex_qc
 
+#Warning: 69485 het. haploid genotypes present (see rsv_sex_qc.hh ); many
+#Total genotyping rate is 0.997583.
+#5804 variants and 318 people pass filters and QC.
 
 plink \
---bfile rsv_sex_chr \
+--bfile rsv_sex_qc \
 --split-x b37 \
 --make-bed \
 --out rsv_sex_chr
 
 #43 chromosome codes changed, is that 43 variants?
+#hh genotypes stayed the same so not an autosome region problem
 
 plink \
 --bfile rsv_sex_chr \
+--set-hh-missing \
 --indep-pairphase 20000 2000 0.5 \
 --out rsv_sex_LD
+
+#Warning: 66700 het. haploid genotypes present (see rsv_sex_LD.hh )
+#5804 variants and 318 people pass filters and QC.
+#Pruned 2065 variants from chromosome 23, leaving 3696.
+#Pruned 14 variants from chromosome 25, leaving 29.
+#Pruning complete.  2079 of 5804 variants removed.
+
 
 plink \
 --bfile rsv_sex_chr \
 --extract rsv_sex_LD.prune.in \
 --make-bed \
 --out rsv_sex_clean
-
-#6589 variants remaining
+#Warning: 42368 het. haploid genotypes present (see rsv_sex_clean.hh ); many
+#3725 variants and 318 people pass filters and QC.
 
 plink \
 --bfile rsv_sex_clean \
@@ -73,11 +85,11 @@ plink \
 #145 mismatches without
 
 plink \
---bfile rsv_sex_clean \
+--bfile rsv_sex_hh \
 --check-sex ycount  \
 --out rsv_redo
 
-
+#Still 65 errors
 
 #Errors
 #"<number> het. haploid genotypes present (see plink.hh )."
