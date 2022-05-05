@@ -239,3 +239,15 @@ plink2 \
 --make-bed \
 --out $qcdir.1KG_merged.IBD
 #Works :)
+
+#Sex check -------------------------------------------------------------------------------
+#Update sex info of fam file of RSV data
+#Run --check-sex in plink (1.9)
+cd $sex_checkdir
+
+plink2 \
+--bfile rsv_QC2 \
+--keep study_samples.txt \
+--update-sex update_sex.txt \
+--make-bed \
+--out rsv_sex
