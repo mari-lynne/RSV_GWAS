@@ -26,6 +26,32 @@ log=$refdir/plink_log
 mkdir -p $refdir/qc_ancestry 
 qcdir=$refdir/qc_ancestry #qcdir will contain the cleaned study and refernce data
 
+#Download refernce data -------------------------------------------------------
+
+pgen=https://www.dropbox.com/s/e5n8yr4n7y91fyp/all_hg38.pgen.zst?dl=1
+pvar=https://www.dropbox.com/s/cy46f1c8yutd1h4/all_hg38.pvar.zst?dl=1
+sample=https://www.dropbox.com/s/3j9zg103fi8cjfs/hg38_corrected.psam?dl=1
+wget $pgen
+mv 'all_hg38.pgen.zst?dl=1' all_hg38.pgen.zst
+plink2 --zst-decompress all_hg38.pgen.zst > all_hg38.pgen
+wget $pvar
+mv 'all_hg38.pvar.zst?dl=1' all_hg38.pvar.zst
+wget $sample
+mv 'hg38_corrected.psam?dl=1' all_hg38.psam
+
+echo 1000g data download DONE
+
+#Convert to Bed
+plink2 \
+--pfile $refdir/$refname vzs --max-alleles 2 \
+--allow-extra-chr \
+--autosome \
+--make-bed \
+--out $refdir/$refname
+mv $refdir/$refname.log $log
+
+#--allow-extra-chr 
+
 
 # 1) Tidy Study and Reference data---------------------------------------------------
 
@@ -146,24 +172,70 @@ plink2 \
 
 #Remerge -----------------------------------------------------------------------
 
-plink \
---bfile $name.rm_dup \
---bmerge $refname.cleanMerge \
---make-bed \
---out 1KG_merged
 
 plink \
---bfile 1KG_merged \
+--bfile $name.cleaned \
+--bmerge $refname.cleanMerge \
+--make-bed \
+--out 1KG.merged
+
+plink \
+--bfile 1KG.merged \
 --geno 0.01 \
 --maf 0.01 \
 --hwe 0.0001 \
 --make-bed \
---out 1KG_merged_qc
+--out 1KG.merged
 
 
 #move log files
 mv *.log $log
-rm *nosex
+rm *.nosex
+rm *~
 
-echo file cleaning done
-#Check annotation --------------------------------------------------
+echo File cleaning done
+
+# PCA ----------------------------------------------------------------------------------------------------------------------
+
+plink2 \
+--bfile 1KG_merged \
+--pca \
+--out 1KG_merged
+
+#Eigenvec file has FID (0s) IID PC1-10
+#get ID and pop from original psam file 
+#FID added in ref final fam, if not just use psam
+
+#awk '{print $1, $5, $6}' $refdir/$refname.psam > $qcdir/1kG_ID2Pop.txt
+#need to add FIDs back in script instead of manual
+awk '{print $1, $2, $6, $7}' $refdir/Ref_final.fam > $qcdir/1kG_ID2Pop.txt
+
+
+# Relatedness check ---------------------------------------------------------------------------------------------------------
+#Fliter related participants
+#calculate IBD using plink --genome flag and filter using pi-hat score
+#Should rerun this pre-pcs further analysis
+
+#Remove related samples 1KG
+#https://www.cog-genomics.org/plink/2.0/resources#1kg_phase3
+plink2 --bfile $qcdir/1KG_merged --remove deg2_hg38.king.cutoff.out.id --make-bed --out $qcdir/1KG_merged.no_sib
+
+plink \
+--bfile 1KG_merged.no_sib \
+--genome \
+--missing \
+--out 1KG_merged
+
+#Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
+awk '$10 >= 0.1875 {print $1, $2}' $qcdir/1KG_merged.genome | uniq > $qcdir/1KG_merged.outliers.txt 
+wc -l 1KG_merged.outliers.txt
+
+echo outlier list - Done
+
+#Use outlier list to filter samples in PLINK data 
+plink2 \
+--bfile $qcdir/1KG_merged.no_sib \
+--remove $qcdir/1KG_merged.outliers.txt \
+--make-bed \
+--out $qcdir.1KG_merged.IBD
+#Works :)
