@@ -1,8 +1,8 @@
 library(data.table)
-library(dplyr)
 library(tidylog)
 library(tidyr)
 library(stringr)
+library(dplyr)
 
 #Post-impute plans:
 #Files to make ####
@@ -15,22 +15,22 @@ library(stringr)
 - Redo 1000g PCA
 
 #Check IDs in fam file 
-setwd("~/RSV/post-imp")
+setwd("~/RSV/data/post-imp/Assoc")
 
 fam <- fread("RSV_imp_QC.fam")
 #FIDs are 0's
 #IIDs are A4634.cel file names (somewhere have been doubled, sep by _)
 
-clin <- fread("~/RSV/meta/clinical_data_full_fin_comb.csv")
+clin <- fread("~/RSV/data/meta/clinical_data_full_fin_comb.csv")
 #full_IDs	Study.Subject.ID
 #OX02-8860	OX020007 (clin data)
 
 
-IDs <- fread("~/RSV/meta/oxford_sample_name_key.csv")
+IDs <- fread("~/RSV/data/meta/oxford_sample_name_key.csv")
 #link to biobank not array name
 
 #Get recode file 
-ID_link <- fread("~/RSV/meta/A4634_Sample_Annotation_and_QC_fails.csv")
+ID_link <- fread("~/RSV/data/meta/A4634_Sample_Annotation_and_QC_fails.csv")
 #Other files are the other study data, need to speak to other sites about their metadata
 #A-number (Same as fam), Sample_ID =OX01-8640-V1-DNA1
 #This looks like either the biobank ID or Uniq_ID in other ID file
@@ -56,6 +56,7 @@ ID_link <- ID_link %>% separate(Sample_ID, c("site", "Biobank", "Visit", "Sample
 IDs$Biobank <- as.character(IDs$Biobank)
 test <- left_join(IDs, ID_link, by = "Biobank")
 #Matched rows =153, #163 IDs leftover in ID file unjoined
+library(tidylog)
 
 #Lets try cat ID_link file site biobank to fullIDs to match clin data (Sep by -)
 ID_link$fullIDs <- paste(ID_link$site, ID_link$Biobank, sep= "-")
@@ -72,9 +73,10 @@ fam2 <- fam2 %>% mutate(Split_ID2 = str_replace_all(Split_ID, "\\.CEL", ""))
 
 #reorder fam
 fam2 <- fam2[,c(1,8,3:6)]
+head(fam2)
 
 #save.fam file
-write.table(file = "~/RSV/post-imp/RSV_imp_QC.fam", fam2, row.names = F, col.names = T, quote=F, sep="\t")
+write.table(file = "~/RSV/data/post-imp/RSV_imp_QC.fam", fam2, row.names = F, col.names = T, quote=F, sep="\t")
 
 #it is the psam file I want to modify
 psam <- fread("RSV_imp_QC.psam")
@@ -82,7 +84,7 @@ psam <- fread("RSV_imp_QC.psam")
 psam2 <- select(fam2, Split_ID2, V5)
 names(psam2) <- c("IID", "SEX")
 
-write.table(file = "~/RSV/post-imp/RSV_imp_QC.psam", psam2, row.names = F, col.names = T, quote=F, sep="\t")
+write.table(file = "~/RSV/data/post-imp/RSV_imp_QC.psam", psam2, row.names = F, col.names = T, quote=F, sep="\t")
 
 #Make pheno file ##########
 #Reformat Clin2 columns
