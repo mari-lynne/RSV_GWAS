@@ -11,10 +11,17 @@ knitr::opts_knit$set(root.dir = 'home/mari/RSV/data/post-imp/Assoc')
 ```
 
 ### Concatenation
+
+Concatenate separate chromosome files from imputation server back into merged file
+
 ```{bash}
+# Call concat script
 bash concat.sh
 ```
-### QC genotyped SNPs for frequency
+
+### QC imputed SNPs
+
+Recheck previous thresholds
 
 ```{bash PLINK set up and QC}
 
@@ -26,16 +33,19 @@ plink2 --pfile RSV_imp_QC --geno 0.05 --mind 0.05 --maf 0.01 --make-pgen --out R
 #So out of 340 the SNPs would have to be in 12 people
 #10% cut off is probably better for assoc analysis in 34 people
 
-#Convert to bfile
+#Convert back to bfile
 #Plink2 pmerge function is still under development
 
 plink2 --pfile RSV_imp_QC --geno 0.05 --mind 0.05 --maf 0.01 --make-bed --out RSV_imp_QC
 
 ```
+
 **RSV post-imputation results:**
-- No varients removed after first QC round
-- 25531828 variants removed due to allele frequency threshold(s)
-- 8,917,131 variants remaining after main filters
+
+-   No variants removed after first QC round
+
+-   25531828 variants removed due to allele frequency threshold(s) \
+    8,917,131 variants remaining after main filters
 
 ```{bash Run Ethnicity Script}
 #Script to check ethnicity data against 1000genomes
@@ -44,18 +54,21 @@ bash Ethnicity_Check.sh
 # Ref merging errors - come back to reformatting see test4/3.sh and 1000g and ref_cleaning scripts
 ```
 
-```{bash FIlter IDs}
+```{bash Filter IDs}
+# Just keep our case/control study samples for now
 plink2 --pfile RSV_imp_QC --keep study_samples.txt --make-pgen --out RSV_Oxford
-#318 samples
+# 318 samples
 ```
 
 ### PCA
 
-- Use a PCA to account for population structure in data
-- Check ancestry first by plotting PCA and colour coding by ethnicity
-- Can also merge with public population databases
+-   Use a PCA to account for population structure in data
 
-- Include PCA's as covariates in assocation model
+-   Check ancestry first by plotting PCA and colour coding by ethnicity
+
+-   Can also merge with public population databases
+
+-   Include PCA's as covariates in association model
 
 ```{bash Run PCA}
 #plink2 --pfile RSV_imp_QC --pca --out all_Samples
@@ -101,13 +114,14 @@ write.table(pca_covar, file = "pca_covar.txt", row.names = F, quote = F, sep = "
 
 ### Conclusions
 
-- Include first 4 PC's as covariates in association analysis
+-   Include first 4 PC's as covariates in association analysis
 
 ### Association Analysis
 
-Initial linear association model (GLM) with --pheno-name RESV_total_score
-Covars to include = PC1-4, Sex, has_pre_ex_con, baseline_age_at_visit
-https://www.cog-genomics.org/plink/2.0/assoc
+-   Initial linear association model (GLM) with --pheno-name RESV_total_score
+
+-   Covariates to include = PC1-4, Sex, has_pre_ex_con, baseline_age_at_visit\
+    <https://www.cog-genomics.org/plink/2.0/assoc>
 
 ```{bash Association Analysis}
 #mkdir -p Assoc
@@ -135,11 +149,11 @@ head(tophits)
 #Write top hits file 
 write.table(tophits, file = "Assoc/tophits.txt", quote = F, row.names= F, sep = "\t")
 ```
+
 ```{bash CD14 association}
 plink2 --pfile RSV_Oxford --chr 5 --from-bp 140630856 --to-bp 140634071 --pheno pheno.txt --pheno-name RESV_total_score --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out CD14_
 ```
+
 ```{r CD14 results}
 
 ```
-
-
