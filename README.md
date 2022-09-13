@@ -16,6 +16,16 @@ Part of the Rescue consortium https://resc-eu.org/
 - SNP nexus was used to annotate SNPs of interest
 - https://www.snp-nexus.org/index.html
 
+# QC thresholds
+
+- QC raw data according to axiom guidance
+- QC 1 in PLINK --geno 0.1 --mind 0.1 --hwe 0.000001, then geno 0.5
+- QC in R for AT/CG, autosome SNPs, and mismatch
+- QC frequency in Perl and align to ref genome
+- QC TopMed for R2 > 0.7
+- QC again for --geno 0.1 --mind 0.1; --geno 0.05 --mind 0.05 --maf 0.01 minor allele freq
+- QC for IBD and sex mismatch, and visual inspection of PCA
+
 # Git instructions
 
 - To work on scripts please start a new Rstudio Project > version control > exisiting Repo https://github.com/mari-lynne/RSV_GWAS
