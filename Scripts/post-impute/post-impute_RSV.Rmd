@@ -7,7 +7,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
-knitr::opts_knit$set(root.dir = 'home/mari/RSV/data/post-imp/Assoc')
+knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
+setwd("~/RSV/data/post-imp/Assoc")
 ```
 
 ### Concatenation
@@ -21,7 +22,7 @@ bash concat.sh
 
 ### QC imputed SNPs
 
-Recheck previous thresholds
+Re-check previous thresholds
 
 ```{bash PLINK set up and QC}
 
@@ -44,7 +45,7 @@ plink2 --pfile RSV_imp_QC --geno 0.05 --mind 0.05 --maf 0.01 --make-bed --out RS
 
 -   No variants removed after first QC round
 
--   25531828 variants removed due to allele frequency threshold(s) \
+-   25531828 variants removed due to allele frequency threshold(s)\
     8,917,131 variants remaining after main filters
 
 ```{bash Run Ethnicity Script}
@@ -70,8 +71,29 @@ plink2 --pfile RSV_imp_QC --keep study_samples.txt --make-pgen --out RSV_Oxford
 
 -   Include PCA's as covariates in association model
 
+-   Need to prune for LD and sibling pairs (IBD)
+
+
+```{bash sib check}
+
+plink2 \
+--pfile RSV_Oxford \
+--genome \
+--missing \
+--out RSV_Oxford_sib
+
+#Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
+awk '$10 >= 0.1875 {print $1, $2}'RSV_Oxford_sib | uniq > RSV_Oxford_sib.outliers.txt 
+wc -l RSV_Oxford_sib.outliers.txt
+
+
+```
+
+
 ```{bash Run PCA}
-#plink2 --pfile RSV_imp_QC --pca --out all_Samples
+# PCA prep LD prune and IBD check
+
+plink2 --pfile RSV_Oxford_nosib --pca 
 plink2 --pfile RSV_Oxford --pca 
 ```
 
