@@ -1,3 +1,5 @@
+# Set up -----------------------------------------------------------------------
+
 setwd("~/RSV/data/post-imp/Assoc")
 plot_dir <- c("~/RSV/data/post-imp/Assoc/plots/")
 
@@ -7,7 +9,20 @@ top <-
 
   colnames(top)
 
-# Calculate frequency of categories
+  library(dplyr)
+  library(data.table)
+  library(ggplot2)
+  library(qqman)
+  library(ggrepel) 
+  library(tidyr)
+  library(tidylog)
+  library(stringi)
+  library(janitor)
+  library(stringr)
+  library(RColorBrewer)
+  
+  
+# Calculate frequency of categories --------------------------------------------
 
 levels(top$Predicted_Function) #Need to concat levels
 levels(top$Feature_Type)
@@ -17,7 +32,7 @@ levels(top$Symbol) #131
 freq <-
   setDT(top)[, .N, keyby = Feature_Type]
 
-# Pie charts ####
+# Pie charts -------------------------------------------------------------------
 
 bp <-
   ggplot(freq, aes(x = "", y = N, fill = Feature_Type)) +
@@ -61,7 +76,6 @@ gwas<- filter(gwas, TEST == "ADD") #Keep just genetic testing
 write.csv(gwas, file = "RESV_gwas.csv")
 
 #Plot Manhattan
-library(qqman)
 
 pdf(file =(paste(plot_dir,"RESV_man.pdf",sep ="")))
 manhattan(gwas, ylim = c(0, 8),
