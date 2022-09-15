@@ -8,15 +8,28 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
-setwd("~/RSV/data/post-imp/Assoc")
 ```
+```{r Packages}
+  library(dplyr)
+  library(data.table)
+  library(ggplot2)
+  library(qqman)
+  library(ggrepel) 
+  library(tidyr)
+  library(tidylog)
+  library(stringi)
+  library(janitor)
+  library(stringr)
+  library(RColorBrewer)
+```
+
 
 ### Concatenation
 
-Concatenate separate chromosome files from imputation server back into merged file
+Concatenate separate chromosome files from imputation server back into single merged file. Script utilises bcftools.
 
 ```{bash}
-# Call concat script
+# Call concatenation script
 bash concat.sh
 ```
 
@@ -49,16 +62,18 @@ plink2 --pfile RSV_imp_QC --geno 0.05 --mind 0.05 --maf 0.01 --make-bed --out RS
     8,917,131 variants remaining after main filters
 
 ```{bash Run Ethnicity Script}
-#Script to check ethnicity data against 1000genomes
-#liftover back to 37 is required unfortunately
-bash Ethnicity_Check.sh
-# Ref merging errors - come back to reformatting see test4/3.sh and 1000g and ref_cleaning scripts
+# Script to check ethnicity data against 1000 Genomes
+bash ancestry_check_38.sh
+
 ```
 
 ```{bash Filter IDs}
 # Just keep our case/control study samples for now
 plink2 --pfile RSV_imp_QC --keep study_samples.txt --make-pgen --out RSV_Oxford
 # 318 samples
+
+# Convert plink 1 version
+plink2 --pfile RSV_Oxford --make-bed --out RSV_Oxford
 ```
 
 ### PCA
@@ -76,62 +91,92 @@ plink2 --pfile RSV_imp_QC --keep study_samples.txt --make-pgen --out RSV_Oxford
 
 ```{bash sib check}
 
-plink2 \
---pfile RSV_Oxford \
---genome \
---missing \
---out RSV_Oxford_sib
+# Requires 1.9
+plink --bfile RSV_Oxford --genome --missing --out RSV_Oxford_sib
 
 #Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
-awk '$10 >= 0.1875 {print $1, $2}'RSV_Oxford_sib | uniq > RSV_Oxford_sib.outliers.txt 
+awk '{if ($10 >= 0.1875) {print $1, $2}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt 
+awk '{if ($10 >= 0.1875) {print $1, $2, $3, $4, $10}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.report.txt 
 wc -l RSV_Oxford_sib.outliers.txt
 
-
+# Prune samples from study when calculating PCD
+# Check meta data too
 ```
 
+```{bash}
+awk '{if ($10 >= 0.1875) {print $1, $2}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt
+
+#Filter in plink
+plink2 \
+--bfile RSV_Oxford \
+--remove RSV_Oxford_sib.outliers.txt \
+--make-bed \
+--out RSV_Oxford_nosib
+```
 
 ```{bash Run PCA}
 # PCA prep LD prune and IBD check
 
-plink2 --pfile RSV_Oxford_nosib --pca 
-plink2 --pfile RSV_Oxford --pca 
+plink2 --bfile RSV_Oxford_nosib --pca 
+
+
+#plink2 --pfile RSV_Oxford --pca 
 ```
+
+Run PCA in R
+There is also the PCA plotting script from the ancestry analysis
 
 ```{r Set up PCA in R, eval=TRUE}
 pca <- fread("plink2.eigenvec")
-#Remove hashtag IID in txt file
-
-library("ggplot2")
-
-ggplot(pca, aes(PC1,PC2)) + geom_point()
 eigenval <- fread("plink2.eigenval")
+#Remove hashtag manually in IID in txt file, or next time try '#'
 
-#Colour by ethnicity
-covar <- fread("covar_all.txt") 
+covar <- fread("covar.txt") #"covar_all.txt" 
+pca_covar <- left_join(pca, covar, by = "IID") 
 
-pca_covar <- left_join(pca, covar, by = "IID")
 #matched 318 rows :)
 
 pca_covar$Sex <- as.factor(pca_covar$Sex)
 levels(pca_covar$Sex) <- c("Male", "Female")
 
-#Plot PCA coloured by Sex
-pca_covar %>% ggplot(aes(PC1,PC2, color=Sex)) + geom_point()
+#ooh could compare new pcs.y with old pcs.x
+pca_covar %>% ggplot(aes(PC2.x, PC2.y)) + geom_point()
+# A couple of outliers but no major difference
 
-#Calculate Percentage variance explained
-pve <- data.frame(PC = 1:10, pve = round(eigenval/sum(eigenval)*100,2))
+
+
+# Plot PCA coloured by Sex
+pca1 <- pca_covar %>%
+  ggplot(aes(PC1.y, PC2.y, color = Sex)) +
+  geom_point() +
+  labs(x = "PC1", y = "PC2", title = "PCA by Sex")
+pca1
+
+# Rearrange table
+pca_covar <- pca_covar[,c(1:2,13:16,7:12,17:19)]
+names(pca_covar) <- str_remove_all(names(pca_covar), ".y")
+
+
+# Calculate Percentage variance explained
+pve <-
+  data.frame(PC = 1:10, pve = round(eigenval / sum(eigenval) * 100, 2))
 
 colnames(pve) <- c("PC", "pve")
 pve$PC <- as.factor(pve$PC)
 
-p <- pve %>% ggplot(aes(x=PC,y=pve)) + geom_col()
+p <- pve %>% ggplot(aes(x = PC, y = pve))
 
-pve %>% ggplot(aes(x=PC,y=pve, fill = PC)) + geom_line()
-p + labs(x = "Principle Component", y = "Percentage Varience Explained")
-#Elbow at PC4 #Use first 4 PCAs as covars 
+pve %>% ggplot(aes(x = PC, y = pve, fill = PC)) +
+  geom_col() +
+  geom_line() +
+  labs(x = "Principle Component",
+       y = "Percentage Varience Explained")
 
-#Make new covar file to use
-write.table(pca_covar, file = "pca_covar.txt", row.names = F, quote = F, sep = "\t")
+#Elbow at PC4 #Use first 4 PCAs as Covars
+
+# Make new covar file to use
+write.table(pca_covar, file = "pca_covar2.txt", row.names = F, quote = F, sep = "\t")
+
 ```
 
 ### Conclusions
@@ -148,6 +193,10 @@ write.table(pca_covar, file = "pca_covar.txt", row.names = F, quote = F, sep = "
 ```{bash Association Analysis}
 #mkdir -p Assoc
 plink2 --pfile RSV_Oxford --pheno pheno.txt --pheno-name RESV_total_score --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out Assoc/
+```
+```{bash Case/Control Analysis}
+#mkdir -p Assoc
+plink2 --pfile RSV_Oxford --pheno pheno.txt --pheno-name RSV --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out Assoc/
 ```
 
 ```{r Plot Assoc Results, eval = TRUE}
