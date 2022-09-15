@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
 ```
+
 ```{r Packages}
   library(dplyr)
   library(data.table)
@@ -22,7 +23,6 @@ knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
   library(stringr)
   library(RColorBrewer)
 ```
-
 
 ### Concatenation
 
@@ -88,7 +88,6 @@ plink2 --pfile RSV_Oxford --make-bed --out RSV_Oxford
 
 -   Need to prune for LD and sibling pairs (IBD)
 
-
 ```{bash sib check}
 
 # Requires 1.9
@@ -104,7 +103,7 @@ wc -l RSV_Oxford_sib.outliers.txt
 ```
 
 ```{bash}
-awk '{if ($10 >= 0.1875) {print $1, $2}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt
+awk '{if ($10 >= 0.1875) {print $3, $4}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt
 
 #Filter in plink
 plink2 \
@@ -123,8 +122,7 @@ plink2 --bfile RSV_Oxford_nosib --pca
 #plink2 --pfile RSV_Oxford --pca 
 ```
 
-Run PCA in R
-There is also the PCA plotting script from the ancestry analysis
+Run PCA in R There is also the PCA plotting script from the ancestry analysis
 
 ```{r Set up PCA in R, eval=TRUE}
 pca <- fread("plink2.eigenvec")
@@ -143,13 +141,12 @@ levels(pca_covar$Sex) <- c("Male", "Female")
 pca_covar %>% ggplot(aes(PC2.x, PC2.y)) + geom_point()
 # A couple of outliers but no major difference
 
-
-
 # Plot PCA coloured by Sex
 pca1 <- pca_covar %>%
-  ggplot(aes(PC1.y, PC2.y, color = Sex)) +
+  ggplot(aes(PC1, PC2, color = Sex)) +
   geom_point() +
-  labs(x = "PC1", y = "PC2", title = "PCA by Sex")
+  labs(x = "PC1", y = "PC2", title = "PCA by Sex") + 
+  theme_light()
 pca1
 
 # Rearrange table
@@ -164,11 +161,10 @@ pve <-
 colnames(pve) <- c("PC", "pve")
 pve$PC <- as.factor(pve$PC)
 
-p <- pve %>% ggplot(aes(x = PC, y = pve))
-
-pve %>% ggplot(aes(x = PC, y = pve, fill = PC)) +
+p <- 
+  pve %>% ggplot(aes(x = PC, y = pve, fill = PC)) +
   geom_col() +
-  geom_line() +
+  theme_light() +
   labs(x = "Principle Component",
        y = "Percentage Varience Explained")
 
@@ -177,11 +173,45 @@ pve %>% ggplot(aes(x = PC, y = pve, fill = PC)) +
 # Make new covar file to use
 write.table(pca_covar, file = "pca_covar2.txt", row.names = F, quote = F, sep = "\t")
 
+
+# Case control pheno
+pheno <- fread("pheno.txt")
+
+pheno2 <- pheno %>% 
+  mutate(RSV = ifelse(is.na(RESV_total_score) == TRUE, 1,2))
+
+write.table(pheno2, file = "pheno2.txt", row.names = F, quote = F, sep = "\t")
+
+his <-
+  pheno2 %>%
+  ggplot(aes(x=RESV_total_score)) +
+  geom_histogram(colour = "#AA98A9", fill = "#E0B0FF", bins = 20) +
+  theme_light() +
+  xlab("ReSVinet score")
+his
+
+
+
+
+# PCA plots -----------------------------------------------------------------
+
+pdf(pdf(file =(paste(plot_dir,"pca_sex.pdf",sep =""))))
+pca1
+dev.off()
+
+pdf(pdf(file =(paste(plot_dir,"pva.pdf",sep =""))))
+p
+dev.off()
+
+pdf(pdf(file =(paste(plot_dir,"RESV_his.pdf",sep =""))))
+his
+dev.off()
+
 ```
 
 ### Conclusions
 
--   Include first 4 PC's as covariates in association analysis
+-   Include first 4/poss 5 PC's as covariates in association analysis
 
 ### Association Analysis
 
@@ -192,39 +222,143 @@ write.table(pca_covar, file = "pca_covar2.txt", row.names = F, quote = F, sep = 
 
 ```{bash Association Analysis}
 #mkdir -p Assoc
-plink2 --pfile RSV_Oxford --pheno pheno.txt --pheno-name RESV_total_score --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out Assoc/
+plink2 --bfile RSV_Oxford_nosib --pheno pheno2.txt --pheno-name RESV_total_score --covar pca_covar2.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out nosib2
 ```
+
 ```{bash Case/Control Analysis}
-#mkdir -p Assoc
-plink2 --pfile RSV_Oxford --pheno pheno.txt --pheno-name RSV --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out Assoc/
+plink2 --bfile RSV_Oxford_nosib --pheno pheno2.txt --pheno-name RSV  --covar pca_covar2.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out nosib
 ```
 
-```{r Plot Assoc Results, eval = TRUE}
+### Linear Regression
 
-gwas <- fread("Assoc/RESV_total_score.glm.linear")
+Plink2 fits generalised linear mixed effects model
 
-#rename cols for qqman
-colnames(gwas) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1","TEST","OBS_CT","BETA",        
+y = G𝛽 + C𝛽 + e
+
+-   Where, y is our response variable - ReSVinet score
+
+-   G is our genotype dosage matrix
+
+-   C is our covariate matrix
+
+-   e is the error standard error (or residual) of our model estimate
+
+-   𝛽 are our model coefficients of determination So, for every SNP we are modelling, whether zero, one or two copies of an allele in our population, forms a linear relationship with our y variable, RSV severity.
+
+![](images/Taipei2015session02_page-0012.jpg)
+
+The null hypthothesis is that there is no linear relationship. Therefore if;\
+𝛃 = 0 the allele shows no relationship with our phenotype score\
+𝛃 \> 0 the allele is associated with a more positive score\
+𝛃 \< 0 the allele is associated with a more negative score
+
+The significance of this relationship is then tested by calculating the T statistic:\
+\
+**t = b / SE**
+
+-   **b** is the estimated value of linear slope or the coefficient of the predictor variable.
+
+-   **SE~*b*~** represents the standard error of the coefficient estimation which can be estimated using the following formula:
+
+    -   **SE = S / √N** Where S represents the standard deviation and N represents the total number of data points
+
+If the p-value that corresponds to t is less than some threshold (e.g. α = .05); then we reject the null hypothesis and conclude that there is a statistically significant relationship between the predictor variable and the response variable
+
+```{r Plot Assoc Results, eval = TRUE, cache=TRUE}
+
+
+# RESV severity Assoc -----------------------------------------------------------
+plot_dir <- c("~/RSV/data/post-imp/Assoc/plots/")
+gwas2 <- fread("nosib2.RESV_total_score.glm.linear")
+
+# Rename cols for qqman
+colnames(gwas2) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1","TEST","OBS_CT","BETA",        
                            "SE","T_STAT","P","ERRCODE")
 
-gwas$TEST <- as.factor(gwas$TEST)
-gwas<- filter(gwas, TEST == "ADD") #Keep just genetic testing
+gwas2 <-
+  filter(gwas2, TEST == "ADD")#Keep just genetic testing
 
-#Plot Manhattan
-library(qqman)
+
+#top <- filter(gwas2, P <= 10e-5)
+
+test <- gwas2 %>% filter(P <= 10e-2) %>% select(c("CHR", "BP", "SNP", "REF", "ALT", "P"))
+
+test$SNP <- str_replace_all(test$SNP, ":", "_")
+
+
+#write.table(top, file = "gwas2.txt", quote = F, row.names= F, sep = "\t")
+
+write.table(test, file = "test.txt", quote = F, row.names= F, sep = "\t")
+
+
+# Plot Manhattan
+manhattan(gwas2, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
+
+pdf(file =(paste(plot_dir,"manhattan_RESV2.pdf",sep ="")), paper = "a4r")
 manhattan(gwas, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
+dev.off()
 
-#Inspect top snps:
+?pdf
+
+
+# Inspect top snps: ------------------------------------------------------------
 tophits <- filter(gwas, P < 10e-5)
 head(tophits)
 #Write top hits file 
-write.table(tophits, file = "Assoc/tophits.txt", quote = F, row.names= F, sep = "\t")
+write.table(tophits, file = "tophits2.txt", quote = F, row.names= F, sep = "\t")
+
+tophits2 <- filter(gwas2, P < 10e-5)
+write.table(tophits2, file = "tophits22.txt", quote = F, row.names= F, sep = "\t")
+
+
+# Case control -----------------------------------------------------------------
+
+case <- fread("nosib.RSV.glm.logistic.hybrid")
+names(case) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1", "FIRTH","TEST","OBS_CT","OR",        
+                           "LOG(OR)_SE","Z_STAT","P","ERRCODE")
+
+case <- filter(case, TEST == "ADD") 
+case_tophits <- filter(case, P < 10e-5)
+
+#pdf(file =(paste(plot_dir,"manhattan_RESV.pdf",sep ="")))
+manhattan(case, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
+#Much less sig
+
+```
+
+```{bash}
+# Prep for annotation
+# cut in bash
+
+cut -f 3 tophits22.txt > explore_hits.txt
+sed -i 's/chr//g' explore_hits.txt
+cut -d ':' -f 1,2 explore_hits.txt > explore_hits2.txt
+
+
 ```
 
 ```{bash CD14 association}
-plink2 --pfile RSV_Oxford --chr 5 --from-bp 140630856 --to-bp 140634071 --pheno pheno.txt --pheno-name RESV_total_score --covar covar.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out CD14_
+plink2 --bfile RSV_Oxford_nosib --chr 5 --from-bp 140630856 --to-bp 140634071 --pheno pheno2.txt --pheno-name RESV_total_score --covar pca_covar2.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out CD14
 ```
 
 ```{r CD14 results}
 
+CD14 <- fread("CD14.RESV_total_score.glm.linear")
+CD14 <- filter(CD14, TEST == "ADD")
+# No sig results
+
 ```
+```{r gtex}
+
+gtex <- read.csv(file = "gtex.csv")
+
+gtex <- drop_na(gtex) %>% filter(dbSNP != "none")
+
+gtex$tissue <- rep("Lung", length(gtex$dbSNP))
+
+gtex <- gtex[1:400,]
+
+write.csv(gtex, file = "gtex_lung.csv", row.names = F, quote = F)
+
+```
+
