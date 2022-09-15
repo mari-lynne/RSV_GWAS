@@ -1,20 +1,20 @@
 #!/bin/bash
 set -uex
 
-#Notes:
+# Notes:
 #Previous attempts required converting back into GChr37 as that was the only reference genome I could find
 #Will redo ancestry check using GChr38 data found on PLINK2 site
 #Run Script as source ~/RSV/RSV_GWAS/Scripts/post-impute/ancestry_check_38.sh
 
-#Steps:
-##Download ref data
+# Steps:
+#Download ref data
 #Prune for linkage disequilibrium
 #Clean both our ref and study data for AT/CG SNPs and duplicates/CHR mismatches
 #Check SNP annotation, either update ref to CHR:POS:BP or study data to rsIDs
 #Merge data sets (Plink1.9) 
 #PCA of data colour code by ancestry
 
-#Set up directories -------------------------------------------------------
+# Set up directories -------------------------------------------------------
 
 name=RSV_imp_QC #name of study PLINK files
 refname=all_hg38
@@ -26,7 +26,7 @@ log=$refdir/plink_log
 mkdir -p $refdir/qc_ancestry 
 qcdir=$refdir/qc_ancestry #qcdir will contain the cleaned study and refernce data
 
-#Download refernce data -------------------------------------------------------
+# Download reference data -------------------------------------------------------
 
 pgen=https://www.dropbox.com/s/e5n8yr4n7y91fyp/all_hg38.pgen.zst?dl=1
 pvar=https://www.dropbox.com/s/cy46f1c8yutd1h4/all_hg38.pvar.zst?dl=1
@@ -170,7 +170,7 @@ plink2 \
 --make-bed \
 --out $qcdir/$refname.cleanMerge
 
-#Remerge -----------------------------------------------------------------------
+# Remerge -----------------------------------------------------------------------
 
 
 plink \
@@ -226,7 +226,7 @@ plink \
 --missing \
 --out 1KG_merged
 
-#Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
+# Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
 awk '$10 >= 0.1875 {print $1, $2}' $qcdir/1KG_merged.genome | uniq > $qcdir/1KG_merged.outliers.txt 
 wc -l 1KG_merged.outliers.txt
 
@@ -238,9 +238,9 @@ plink2 \
 --remove $qcdir/1KG_merged.outliers.txt \
 --make-bed \
 --out $qcdir.1KG_merged.IBD
-#Works :)
+# Works :)
 
-#Sex check -------------------------------------------------------------------------------
+# Sex check -------------------------------------------------------------------------------
 #Update sex info of fam file of RSV data
 #Run --check-sex in plink (1.9)
 cd $sex_checkdir
