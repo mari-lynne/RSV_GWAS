@@ -4,6 +4,7 @@ output:
   html_document:
     df_print: paged
 ---
+
 ---
 title: "SNP Annotation"
 author: "Mari Johnson"
@@ -17,21 +18,24 @@ knitr::opts_chunk$set(echo = TRUE, eval=FALSE, root.dir = 'home/mari/RSV/post-im
 
 ### Aims
 
-- Upload SNP list to SNPNexus/VEP
-- Results in various annotation files
-- Download snp annotation results as .txt files and read into R 
-- For candidate gene analysis prioritise and filter SNPs with gtex tissue expression, coding snps etc.
+-   Upload SNP list to SNPNexus/VEP
+-   Results in various annotation files
+-   Download snp annotation results as .txt files and read into R
+-   For candidate gene analysis prioritise and filter SNPs with GTex tissue expression, coding snps etc.
 
 ##### Load Packages:
+
 ```{r Packages}
 library(data.table)
 library(tidylog)
 library(dplyr)
 library(stringr)
 ```
+
 #### Write nexus snp list
 
-Upload data to SNP nexus to get genome annotation https://www.snp-nexus.org/v4/
+Upload data to SNP nexus to get genome annotation <https://www.snp-nexus.org/v4/>
+
 ```{r format Nexus snp list}
 tophits <- fread("tophits.txt")
 nexus <- select(tophits, CHR, BP, REF, ALT) #957
@@ -44,7 +48,9 @@ names(nexus) <- c("Type","Id","Position","Alelle1","Allele2","Strand")
 write.table(nexus, "nexus.txt", row.names = F, col.names = F, quote = F, sep = " ")
 #Then need to find what these snps are in LD with
 ```
+
 #### Read nexus .txt files into R
+
 ```{r Read in Annotation data}
 
 #Read in data
@@ -56,7 +62,9 @@ names(myfiles) <- trim
 #Unlist files
 list2env((myfiles), envir = .GlobalEnv)
 ```
+
 #### Format Annotation Data
+
 ```{r Format Annotation data}
 #ID file ####
 ID <- gen_ #contains file of nearest gene to the snps
@@ -116,22 +124,20 @@ write.csv(main, file = "GWAS_summary.data.csv", row.names = F)
 ```
 
 #### Results:
-##### Notes so far:
+
+##### Results so far:
 
 **Pathway Analysis**\
-- https://www.snp-nexus.org/v4/reacfoam/8d91878c/\
-- CDC42 SNP! RSV uses CDC42 (like HIV) for viral entry\
-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\
-- CDC42/Rac1 (Rho GTPases - actin remodelling) inhibitors sig reduced viral load\
-- https://www.nature.com/articles/s42003-021-02754-2/figures/7\
+- [[https://www.snp-nexus.org/v4/reacfoam/8d91878c/\\\\](https://www.snp-nexus.org/v4/reacfoam/8d91878c/\){.uri}]([https://www.snp-nexus.org/v4/reacfoam/8d91878c/\\](https://www.snp-nexus.org/v4/reacfoam/8d91878c/)%7B.uri%7D){.uri} - CDC42 SNP! RSV uses CDC42 (like HIV) for viral entry\
+- [[https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\\\\](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\){.uri}]([https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\\](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/)%7B.uri%7D){.uri} - CDC42/Rac1 (Rho GTPases - actin remodelling) inhibitors sig reduced viral load\
+- [[https://www.nature.com/articles/s42003-021-02754-2/figures/7\\\\](https://www.nature.com/articles/s42003-021-02754-2/figures/7\){.uri}]([https://www.nature.com/articles/s42003-021-02754-2/figures/7\\](https://www.nature.com/articles/s42003-021-02754-2/figures/7)%7B.uri%7D){.uri}
 
 **Public GWAS hits**\
-- chr11:1852991:C/T:1	Monocyte count rs907612\
-- chr11:1852842:G/A:1	Lymphocyte counts	3E-10	rs907611 - increase in LRT1 receptor (lymphocyte trafficking receptor in lungs)\
-- LRT1 This gene encodes an intracellular F-actin binding protein. The protein is expressed in lymphocytes, neutrophils, macrophages, and endothelium and may regulate neutrophil motility, adhesion to fibrinogen matrix proteins, and transendothelial migration
-May play a role in mediating neutrophil activation and chemotaxis. LSP1_HUMAN,P33241
-
-
+- chr11:1852991:C/T:1 Monocyte count rs907612\
+- chr11:1852842:G/A:1 Lymphocyte counts 3E-10 rs907611 - increase in LRT1 receptor (lymphocyte trafficking receptor in lungs)\
+- LRT1 This gene encodes an intracellular F-actin binding protein.\
+- The protein is expressed in lymphocytes, neutrophils, macrophages, and endothelium and may regulate neutrophil motility, adhesion to fibrinogen matrix proteins, and transendothelial migration.\
+- May play a role in mediating neutrophil activation and chemotaxis. LSP1_HUMAN,P33241
 
 ```{r gtEX, echo = FALSE}
 #query for whole blood
@@ -147,4 +153,5 @@ annote <- left_join(ense2, ID, by = "Variation ID") %>%
 gwas_hits <- left_join(gwas, annote, by ="Variation ID")
 #chr1:161630802:A/G:1
 ```
-#
+
+# 
