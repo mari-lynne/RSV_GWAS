@@ -1,0 +1,223 @@
+---
+title: "Post-Imputation QC"
+author: "Mari Johnson"
+date: "05/04/2022"
+output: html_document
+---
+
+### Aims:
+
+-   Following imputation of data in TopMED, reformat data for association analysis
+-   QC imputed SNPs
+-   Script also checks for relatedness of our participants
+-   Visualise population structure with PCA
+-   Format PC data to include in model
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
+```
+
+```{r Packages}
+  library(dplyr)
+  library(data.table)
+  library(ggplot2)
+  library(qqman)
+  library(ggrepel) 
+  library(tidyr)
+  library(tidylog)
+  library(stringi)
+  library(janitor)
+  library(stringr)
+  library(RColorBrewer)
+```
+
+### Concatenation
+
+Concatenate separate chromosome files from imputation server back into single merged file. Script utilises bcftools.
+
+```{bash}
+# Call concatenation script
+bash concat.sh
+```
+
+### QC imputed SNPs
+
+Re-check previous thresholds
+
+```{bash PLINK set up and QC}
+
+#Convert VCF to plink2 pfile
+
+plink2 --vcf RSV_imputed.vcf.gz --geno 0.1 --mind 0.1 --make-pgen --out RSV_imp_QC
+plink2 --pfile RSV_imp_QC --geno 0.05 --mind 0.05 --maf 0.01 --make-pgen --out RSV_imp_QC
+#SNPs missing from 5% of population MAF <5 %
+#So out of 340 the SNPs would have to be in 12 people
+#10% cut off is probably better for assoc analysis in 34 people
+
+#Convert back to bfile
+#Plink2 pmerge function is still under development
+
+plink2 --pfile RSV_imp_QC --geno 0.05 --mind 0.05 --maf 0.01 --make-bed --out RSV_imp_QC
+
+```
+
+**RSV post-imputation results:**
+
+-   No variants removed after first QC round
+
+-   25531828 variants removed due to allele frequency threshold(s)\
+    8,917,131 variants remaining after main filters
+
+```{bash Run Ethnicity Script}
+# Script to check ethnicity data against 1000 Genomes
+bash ancestry_check_38.sh
+
+```
+
+```{bash Filter IDs}
+# Just keep our case/control study samples for now
+plink2 --pfile RSV_imp_QC --keep study_samples.txt --make-pgen --out RSV_Oxford
+# 318 samples
+
+# Convert plink 1 version
+plink2 --pfile RSV_Oxford --make-bed --out RSV_Oxford
+```
+
+### Sibling check 
+
+```{bash sib check}
+
+# Requires 1.9
+plink --bfile RSV_Oxford --genome --missing --out RSV_Oxford_sib
+
+# Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
+awk '{if ($10 >= 0.1875) {print $1, $2}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt 
+awk '{if ($10 >= 0.1875) {print $1, $2, $3, $4, $10}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.report.txt 
+wc -l RSV_Oxford_sib.outliers.txt
+
+# Prune samples from study when calculating PCD
+# Check meta data too
+```
+
+```{bash}
+
+awk '{if ($10 >= 0.1875) {print $3, $4}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt
+# Filter in plink
+plink2 \
+--bfile RSV_Oxford \
+--remove RSV_Oxford_sib.outliers.txt \
+--make-bed \
+--out RSV_Oxford_nosib
+
+```
+
+### Principle component analysis
+
+-   Use a PCA to account for population structure in data
+
+-   Check ancestry first by plotting PCA and colour coding by ethnicity
+
+-   Can also merge with public population databases
+
+-   Include PCA's as covariates in association model
+
+-   Need to prune for LD and sibling pairs (IBD)
+
+```{bash Run PCA}
+# PCA prep LD prune and IBD check
+
+plink2 --bfile RSV_Oxford_nosib --pca 
+
+
+#plink2 --pfile RSV_Oxford --pca 
+```
+
+Run PCA in R. There is also the PCA plotting script from the ancestry analysis
+
+```{r Set up PCA in R, eval=TRUE}
+pca <- fread("plink2.eigenvec")
+eigenval <- fread("plink2.eigenval")
+# Remove hashtag manually in IID in txt file, or next time try '#'
+
+covar <- fread("covar.txt") #"covar_all.txt" 
+pca_covar <- left_join(pca, covar, by = "IID") 
+
+# matched 318 rows :)
+
+pca_covar$Sex <- as.factor(pca_covar$Sex)
+levels(pca_covar$Sex) <- c("Male", "Female")
+
+#ooh could compare new pcs.y with old pcs.x
+pca_covar %>% ggplot(aes(PC2.x, PC2.y)) + geom_point()
+# A couple of outliers but no major difference
+
+# Plot PCA coloured by Sex
+pca1 <- pca_covar %>%
+  ggplot(aes(PC1, PC2, color = Sex)) +
+  geom_point() +
+  labs(x = "PC1", y = "PC2", title = "PCA by Sex") + 
+  theme_light()
+pca1
+
+# Rearrange table
+pca_covar <- pca_covar[,c(1:2,13:16,7:12,17:19)]
+names(pca_covar) <- str_remove_all(names(pca_covar), ".y")
+
+
+# Calculate Percentage variance explained
+pve <-
+  data.frame(PC = 1:10, pve = round(eigenval / sum(eigenval) * 100, 2))
+
+colnames(pve) <- c("PC", "pve")
+pve$PC <- as.factor(pve$PC)
+
+p <- 
+  pve %>% ggplot(aes(x = PC, y = pve, fill = PC)) +
+  geom_col() +
+  theme_light() +
+  labs(x = "Principle Component",
+       y = "Percentage Varience Explained")
+
+#Elbow at PC4 #Use first 4 PCAs as Covars
+
+# Make new covar file to use
+write.table(pca_covar, file = "pca_covar2.txt", row.names = F, quote = F, sep = "\t")
+
+
+# Case control pheno
+pheno <- fread("pheno.txt")
+
+pheno2 <- pheno %>% 
+  mutate(RSV = ifelse(is.na(RESV_total_score) == TRUE, 1,2))
+
+write.table(pheno2, file = "pheno2.txt", row.names = F, quote = F, sep = "\t")
+
+his <-
+  pheno2 %>%
+  ggplot(aes(x=RESV_total_score)) +
+  geom_histogram(colour = "#AA98A9", fill = "#E0B0FF", bins = 20) +
+  theme_light() +
+  xlab("ReSVinet score")
+his
+
+# PCA plots -----------------------------------------------------------------
+
+pdf(pdf(file =(paste(plot_dir,"pca_sex.pdf",sep =""))))
+pca1
+dev.off()
+
+pdf(pdf(file =(paste(plot_dir,"pva.pdf",sep =""))))
+p
+dev.off()
+
+pdf(pdf(file =(paste(plot_dir,"RESV_his.pdf",sep =""))))
+his
+dev.off()
+
+```
+
+### Conclusions
+
+-   Four sibling pairs detected, including 1 pair of twins. Removed one sibling from each pair.
+-   Include first 4 PC's as covariates in association analysis.
