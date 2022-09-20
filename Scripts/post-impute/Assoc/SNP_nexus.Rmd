@@ -5,15 +5,9 @@ output:
     df_print: paged
 ---
 
----
-title: "SNP Annotation"
-author: "Mari Johnson"
-date: "23/03/2022"
-output: html_document
----
-
 ```{r setup, include=FALSE, eval=TRUE}
-knitr::opts_chunk$set(echo = TRUE, eval=FALSE, root.dir = 'home/mari/RSV/post-imp/Assoc')
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc/nexus/no_sib')
 ```
 
 ### Aims
@@ -30,6 +24,7 @@ library(data.table)
 library(tidylog)
 library(dplyr)
 library(stringr)
+library(openxlsx)
 ```
 
 #### Write nexus snp list
@@ -37,15 +32,16 @@ library(stringr)
 Upload data to SNP nexus to get genome annotation <https://www.snp-nexus.org/v4/>
 
 ```{r format Nexus snp list}
-tophits <- fread("tophits.txt")
-nexus <- select(tophits, CHR, BP, REF, ALT) #957
-nexus <- mutate(nexus, strand = rep(1, 947))
-nexus <- mutate(nexus, Type = rep("Chromosome", 947))
+tophits <- fread("tophits22.txt")
+nexus <- select(tophits, CHR, BP, REF, ALT)
+nexus <- mutate(nexus, strand = rep(1, length(nexus$CHR)))
+nexus <- mutate(nexus, Type = rep("Chromosome", length(nexus$CHR)))
 nexus <- select(nexus, Type, CHR, BP, REF, ALT, strand)
 
-names(nexus) <- c("Type","Id","Position","Alelle1","Allele2","Strand")
+names(nexus) <-
+  c("Type", "Id", "Position", "Alelle1", "Allele2", "Strand")
 
-write.table(nexus, "nexus.txt", row.names = F, col.names = F, quote = F, sep = " ")
+write.table(nexus, "nexus/nexus22.txt", row.names = F, col.names = F, quote = F, sep = " ")
 #Then need to find what these snps are in LD with
 ```
 
@@ -53,84 +49,241 @@ write.table(nexus, "nexus.txt", row.names = F, col.names = F, quote = F, sep = "
 
 ```{r Read in Annotation data}
 
-#Read in data
-temp = list.files(pattern="*.txt")
-myfiles = lapply(temp, fread)
-#add names to files  - names(myfiles) <- temp
-trim <- str_extract(temp, ".{4,}?")
-names(myfiles) <- trim
-#Unlist files
-list2env((myfiles), envir = .GlobalEnv)
+# Big variant text file
+
+nex <- fread("RSV_nosib_pervariant.tsv")
+
+
+colnames(nex)
+nex <- clean_names(nex)
+
+#remove extra columns and cols with no vars
+nex <- nex %>%
+  select(-c("genomic_coordinates", "micro_rn_as_mi_rna_registry_sno_rn_as_and_sca_rn_as_sno_rna_lbme_db", "clin_var", "poly_phen", "tar_base_mi_rna_target_sites", "sift","mi_rbase"))
+
+nex <- 
+  dplyr::rename(nex,
+                cpg = cp_g_islands,
+                ensembl_reg_build = ensembl_regulatory_build,
+                public_gwas = nhgri_catalogue_of_published_genome_wide_association_studies,
+                gene = overlapped_or_nearest_genes,
+                structural_var = structural_variations,
+                caad = cadd_combined_annotation_dependent_depletion)
+
+# What database to use for predicted function, do by count?
+na_cols <- sapply(nex, function(y) sum(length(which(y == ""))))
+na_cols <- as.data.frame(na_cols)
+na_cols
+
 ```
 
 #### Format Annotation Data
 
-```{r Format Annotation data}
-#ID file ####
-ID <- gen_ #contains file of nearest gene to the snps
-rm(gen_)
+```{r checking}
+
+gene <- c(nex[1,7])
+encode <- c(nex[1,encode])
+ense <-  c(nex[1,ensembl])
+
+# Format gene column
+
+test <- nex[1:15,]
+
+#regex starts with = ^ #word boundry
+#Any word [\\w] ([^.]+) #all characters up until the next match of
+#ends with : $ [] = literal match
+#matches an (optional) arbitrary string in front of the = : .*
+#matches a literal =: [=]
+#matches everything up to (but not including) the next : and stores it in capturing group no to be called later. 1 : ([^:]+)
+#matches a literal : [:]
+#matches an (optional) arbitrary string after the . : .*
+#In your call to gsub, you then se the regular expression we built in the previous step replace the whole string with the contents of the first capturing group: \\1 (we need to escape the backslash, hence the double backslash)
+
+
+nex$gene <- gsub(".*[=]([^:]+)[:].*", "\\1", nex$gene)
+
+# for all columns, replace word before = (excluding 1kg)
+                
+
+```
+```{r get other tables}
+
+# Read in data
+temp = list.files(pattern = "*.txt")
+myfiles = lapply(temp, fread) #read all files in temp
+trim <- str_extract(temp, ".{4,}?")
+names(myfiles) <- trim
+
+#Unlist files and save to global environment
+list2env((myfiles), envir = .GlobalEnv)
+```
+
+```{r Format Annotation data ID}
+#ID file -----------------------------------------------------------------------
+
+ID <- near #contains file of nearest gene to the snps
+rm(near)
 ID <- ID[,1:8]
 
-#Predicted ensembl function ####
-ense <- ense %>% dplyr::select(`Variation ID`, Variant, Symbol, `Predicted Function`) %>% distinct()
-#Lots of duplicate entries due to contigs I think
-no_introns <- ense %>% filter(`Predicted Function` != "intronic")
+#Predicted ensembl function ----------------------------------------------------
 
-introns <- ense %>% filter(str_detect(ense$`Predicted Function`, "intron"))
-no_introns <- ense %>% filter(!str_detect(ense$`Predicted Function`, "intron"))
-#517 intron SNPs #110 non-intron SNPs
+ense <- fread("ensembl_RSV_nosib.txt")
+
+coding_muts <-
+  filter(ense,`Predicted Function` == "coding")
+
+ense <-
+  ense %>%
+  dplyr::select(`Variation ID`, Variant, Symbol, `Predicted Function`) %>%
+  distinct()
+#Lots of duplicate entries due to contigs I think
+
+introns <-
+  ense %>% filter(str_detect(ense$`Predicted Function`, "intron"))
+
+no_introns <-
+  ense %>% filter(!str_detect(ense$`Predicted Function`, "intron"))
 
 #collapse by ense by ID
-functions <- ense %>%
-  group_by(`Variation ID`, Variant, Symbol) %>%
+ense <- ense %>%
+  group_by(`Variation ID`, Symbol) %>%
   summarise(`Predicted Function` = toString(`Predicted Function`))
-main <- full_join(ID, functions, by = "Variation ID")
-#Matched 485 rows
 
-#Regulatory Elements ####
-#reg elements downloaded from roadmap project via snpnexus 
-rm(road)
-road <- fread("roadmap.txt")
-str(road)
+main <- full_join(ID, functions, by = "Variation ID")
+
+
+#Regulatory Elements -----------------------------------------------------------
+
 road$Epigenome <- as.factor(road$Epigenome)
 levels(road$Epigenome)
-#Contains many tissue eQTLs, #Filter for immune and lung tissue expression
-epi <- road %>% filter(str_detect(road$Epigenome, "B cell|CD4|CD8|T cell|Monocyte|Neutrophil|myeloid|Natural Killer|Spleen|macrophage|lung|esophagus"))
-#Collapse by SNP
-epi <- epi %>%
-  group_by(`Variation ID`, Chromosome, `Feature Type Class`, `Feature Type`) %>%
-  summarise(Epigenome = toString(Epigenome))
-#cat Feature Type and Epigenome to one column
-epi <- epi %>% group_by(`Variation ID`, Chromosome, `Feature Type Class`) %>% mutate(Epigenome_Feature = paste(`Feature Type`, `Epigenome`, sep = ": ")) %>% select(-`Feature Type`, -Epigenome)
-main <- full_join(main, epi, by = "Variation ID")
+# Contains many tissue eQTLs
+# Filter for immune and lung tissue expression
 
-#Polyphen ####
-poly <- poly %>% select(`Variation ID`, Score, Prediction)
-main <- full_join(main, poly, by = "Variation ID")
-main <- main[order(Score),]
+road <-
+  road %>% filter(
+    str_detect(
+      road$Epigenome,
+      "B cell|CD4|CD8|T cell|Monocyte|Neutrophil|myeloid|Natural Killer|Spleen|macrophage|Lung"))
 
-#GWAS public data ####
-gwas <- gwas%>% select(-`Risk Allele`, -Region, -Platform)
-main <- full_join(main, gwas, by = "Variation ID")
-main <- distinct(main)
+# Collapse by SNP
+road <- road %>%
+  group_by(`Variation ID`,
+           `Chromosome`,
+           `Feature Type Class`,
+           `Feature Type`) %>%
+  summarise(Tissue_Express = toString(Epigenome))
+road$Tissue_Express <- str_remove_all(road$Tissue_Express, ("Roadmap"))
 
-#Glm association results ####
-assoc <- toph %>% select(CHR,BP,SNP,BETA,SE,P) %>% rename(Chromosome.x = CHR, Position = BP)
-main <- left_join(assoc, main, by = c("Chromosome.x","Position"))
 
-#Clean table
-main <- main %>% rename(CHR=Chromosome.x) %>% select(-Chromosome.y,-Chromosome,-`Variation ID`)
+# main <- full_join(main, road, by = "Variation ID")
+
+
+# CADD
+
+cadd <- cadd %>%
+  select(`Variation ID`, PHRED)
+
+
+# GWAS public data -------------------------------------------------------------
+
+gwas <- gwas %>%
+  select(`Variation ID`, Trait, `p-Value`,`Risk Allele`, PubMed)
+
+
+
+# Join tables ------------------------------------------------------------------
+
+toph <- select(toph, SNP, CHR, BP, REF, ALT, A1, P, BETA, T_STAT, SE)
+
+# Format SNP - VAR ID for joining
+# chr1:25346917:G:A > chr1:111418204:G/A:1
+
+# Replace the third (or last) instance of :
+# with // /
+
+toph <- rename(toph, `Variant ID` = SNP)
+
+".*[=]([^:]+)[:].*", "\\1", nex$gene
+
+test <- gsub(".*[:]([^///]+)[///].*", "\\1",toph$`Variant ID`)
+head(test)
+
+gsub("((?:[^//:]+//:){3}[^//:]+)//:", "\\1i", toph$`Variant ID`)
+
+(?:[^//:]+//:)
+# First part of the expression is what we want to find (capture)
+# [^c] = all the characters, up until "c", ?: + = lazy search 
+
+{3}[^//:]+)//:
+#second part is the quantifier, how many times to look for string
+  
+\\1i
+#third part specifies what capture group to replace and what char to replace it with 
+
+replN <- function(x,fn,rp,n) {
+    sel <- rep(fn, n*length(rp))
+    sel[seq_along(rp)*n] <- rp
+    regmatches(x, gregexpr(fn, x)) <- list(sel)
+    x
+}
+
+toph$`Variant ID` <- replN(toph$`Variant ID`, fn=":", rp=c("/"), n=3)
+toph$`Variant ID` <- paste(toph$`Variant ID`, ":1", sep = "")
+
+toph <- dplyr::rename(toph, `Variation ID` = `Variant ID`)
+toph <- dplyr::rename(toph, position = bp)
+
+gwas <- clean_names(gwas)
+path <- clean_names(path)
+road <- clean_names(road)
+cadd <- clean_names(cadd)
+ID <- clean_names(ID)
+toph <- clean_names(toph)
+
+
+# 67/71 pos mismatches, or multiallelic ----------------------------------------
+# rows only in x      67 - remove these non matches
+# rows only in y  (   71) 
+
+multi <- anti_join(toph, ID, by = c("variation_id", "position"))
+multi2 <- anti_join(ID, toph, by = c("variation_id", "position"))
+
+#For Top SNPs without matches (multi), check if they can be matched just by var ID or chr + position 
+test <- left_join(multi, multi2, by = c("variation_id"))
+# They can, so filter these from toph for now, join at the end
+
+main <- left_join(ID, toph, by = "variation_id")
+main <- left_join(main, cadd, by = "variation_id", "position")
+main <- left_join(main, road, by = "variation_id", "position")
+gwas <- left_join(gwas, main, by = "variation_id")
+
+main <- main %>% select(!ends_with(".y"))
+names(main) <- str_replace_all(names(main),".x","")
+
+spread <- list('top_hits' = main,
+               'public_gwas' = gwas,
+               'pathway' = path)
+
+write.xlsx(spread, file = "RSV_GWAS_Sep.xlsx")
 write.csv(main, file = "GWAS_summary.data.csv", row.names = F)
+
+
 ```
 
 #### Results:
 
+
+
+
+
+
+
 ##### Results so far:
 
 **Pathway Analysis**\
-- [[https://www.snp-nexus.org/v4/reacfoam/8d91878c/\\\\](https://www.snp-nexus.org/v4/reacfoam/8d91878c/\){.uri}]([https://www.snp-nexus.org/v4/reacfoam/8d91878c/\\](https://www.snp-nexus.org/v4/reacfoam/8d91878c/)%7B.uri%7D){.uri} - CDC42 SNP! RSV uses CDC42 (like HIV) for viral entry\
-- [[https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\\\\](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\){.uri}]([https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\\](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/)%7B.uri%7D){.uri} - CDC42/Rac1 (Rho GTPases - actin remodelling) inhibitors sig reduced viral load\
-- [[https://www.nature.com/articles/s42003-021-02754-2/figures/7\\\\](https://www.nature.com/articles/s42003-021-02754-2/figures/7\){.uri}]([https://www.nature.com/articles/s42003-021-02754-2/figures/7\\](https://www.nature.com/articles/s42003-021-02754-2/figures/7)%7B.uri%7D){.uri}
+- [[https://www.snp-nexus.org/v4/reacfoam/8d91878c/\\\\](https://www.snp-nexus.org/v4/reacfoam/8d91878c/){.uri}](%5Bhttps://www.snp-nexus.org/v4/reacfoam/8d91878c/%5D(https://www.snp-nexus.org/v4/reacfoam/8d91878c/)%7B.uri%7D){.uri} - CDC42 SNP! RSV uses CDC42 (like HIV) for viral entry\
+- [[https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/\\\\](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/){.uri}](%5Bhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/%5D(https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4690878/)%7B.uri%7D){.uri} - CDC42/Rac1 (Rho GTPases - actin remodelling) inhibitors sig reduced viral load\
+- [[https://www.nature.com/articles/s42003-021-02754-2/figures/7\\\\](https://www.nature.com/articles/s42003-021-02754-2/figures/7){.uri}](%5Bhttps://www.nature.com/articles/s42003-021-02754-2/figures/7%5D(https://www.nature.com/articles/s42003-021-02754-2/figures/7)%7B.uri%7D){.uri}
 
 **Public GWAS hits**\
 - chr11:1852991:C/T:1 Monocyte count rs907612\
@@ -155,3 +308,4 @@ gwas_hits <- left_join(gwas, annote, by ="Variation ID")
 ```
 
 # 
+road
