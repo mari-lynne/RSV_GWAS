@@ -93,7 +93,7 @@ plink2 --pfile RSV_Oxford --make-bed --out RSV_Oxford
 # Requires 1.9
 plink --bfile RSV_Oxford --genome --missing --out RSV_Oxford_sib
 
-#Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
+# Remove one sample from each pair with pi-hat (% IBD) above threshold (0.1875 below):
 awk '{if ($10 >= 0.1875) {print $1, $2}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt 
 awk '{if ($10 >= 0.1875) {print $1, $2, $3, $4, $10}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.report.txt 
 wc -l RSV_Oxford_sib.outliers.txt
@@ -105,7 +105,7 @@ wc -l RSV_Oxford_sib.outliers.txt
 ```{bash}
 awk '{if ($10 >= 0.1875) {print $3, $4}}' RSV_Oxford_sib.genome | uniq > RSV_Oxford_sib.outliers.txt
 
-#Filter in plink
+# Filter in plink
 plink2 \
 --bfile RSV_Oxford \
 --remove RSV_Oxford_sib.outliers.txt \
@@ -122,17 +122,17 @@ plink2 --bfile RSV_Oxford_nosib --pca
 #plink2 --pfile RSV_Oxford --pca 
 ```
 
-Run PCA in R There is also the PCA plotting script from the ancestry analysis
+Run PCA in R. There is also the PCA plotting script from the ancestry analysis
 
 ```{r Set up PCA in R, eval=TRUE}
 pca <- fread("plink2.eigenvec")
 eigenval <- fread("plink2.eigenval")
-#Remove hashtag manually in IID in txt file, or next time try '#'
+# Remove hashtag manually in IID in txt file, or next time try '#'
 
 covar <- fread("covar.txt") #"covar_all.txt" 
 pca_covar <- left_join(pca, covar, by = "IID") 
 
-#matched 318 rows :)
+# matched 318 rows :)
 
 pca_covar$Sex <- as.factor(pca_covar$Sex)
 levels(pca_covar$Sex) <- c("Male", "Female")
@@ -211,13 +211,13 @@ dev.off()
 
 ### Conclusions
 
--   Include first 4/poss 5 PC's as covariates in association analysis
+-   Include first 4 PC's as covariates in association analysis
 
 ### Association Analysis
 
--   Initial linear association model (GLM) with --pheno-name RESV_total_score
+-   General linear association model (GLM): pheno-name RESV_total_score
 
--   Covariates to include = PC1-4, Sex, has_pre_ex_con, baseline_age_at_visit\
+-   Covariates to include: PC1-4, Sex, has_pre_ex_con, baseline_age_at_visit\
     <https://www.cog-genomics.org/plink/2.0/assoc>
 
 ```{bash Association Analysis}
@@ -231,7 +231,7 @@ plink2 --bfile RSV_Oxford_nosib --pheno pheno2.txt --pheno-name RSV  --covar pca
 
 ### Linear Regression
 
-Plink2 fits generalised linear mixed effects model
+Plink2 fits generalised linear mixed effects model:
 
 y = G𝛽 + C𝛽 + e
 
@@ -243,11 +243,13 @@ y = G𝛽 + C𝛽 + e
 
 -   e is the error standard error (or residual) of our model estimate
 
--   𝛽 are our model coefficients of determination So, for every SNP we are modelling, whether zero, one or two copies of an allele in our population, forms a linear relationship with our y variable, RSV severity.
+-   𝛽 are our model coefficients of determination. So, for each SNP we are modelling whether zero, one or two copies of an allele in our population, against our linear y variable, RSV severity.
+
+-   Then test to see if there is a relationship, how strong the effect is, if it is signifcant
 
 ![](images/Taipei2015session02_page-0012.jpg)
 
-The null hypthothesis is that there is no linear relationship. Therefore if;\
+The null hypothesis is that there is no linear relationship. Therefore if;\
 𝛃 = 0 the allele shows no relationship with our phenotype score\
 𝛃 \> 0 the allele is associated with a more positive score\
 𝛃 \< 0 the allele is associated with a more negative score
@@ -279,14 +281,14 @@ gwas2 <-
   filter(gwas2, TEST == "ADD")#Keep just genetic testing
 
 
-#top <- filter(gwas2, P <= 10e-5)
+# top <- filter(gwas2, P <= 10e-5)
 
 test <- gwas2 %>% filter(P <= 10e-2) %>% select(c("CHR", "BP", "SNP", "REF", "ALT", "P"))
 
 test$SNP <- str_replace_all(test$SNP, ":", "_")
 
 
-#write.table(top, file = "gwas2.txt", quote = F, row.names= F, sep = "\t")
+# write.table(top, file = "gwas2.txt", quote = F, row.names= F, sep = "\t")
 
 write.table(test, file = "test.txt", quote = F, row.names= F, sep = "\t")
 
@@ -297,9 +299,6 @@ manhattan(gwas2, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, 
 pdf(file =(paste(plot_dir,"manhattan_RESV2.pdf",sep ="")), paper = "a4r")
 manhattan(gwas, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
 dev.off()
-
-?pdf
-
 
 # Inspect top snps: ------------------------------------------------------------
 tophits <- filter(gwas, P < 10e-5)
@@ -320,20 +319,9 @@ names(case) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1", "FIRTH","TEST","OBS_CT"
 case <- filter(case, TEST == "ADD") 
 case_tophits <- filter(case, P < 10e-5)
 
-#pdf(file =(paste(plot_dir,"manhattan_RESV.pdf",sep ="")))
+# pdf(file =(paste(plot_dir,"manhattan_RESV.pdf",sep ="")))
 manhattan(case, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
-#Much less sig
-
-```
-
-```{bash}
-# Prep for annotation
-# cut in bash
-
-cut -f 3 tophits22.txt > explore_hits.txt
-sed -i 's/chr//g' explore_hits.txt
-cut -d ':' -f 1,2 explore_hits.txt > explore_hits2.txt
-
+# Much less sig, and is not suited to reflect a linear response to infection
 
 ```
 
@@ -348,17 +336,24 @@ CD14 <- filter(CD14, TEST == "ADD")
 # No sig results
 
 ```
+
+```{bash}
+# Prep for annotation
+# cut in bash
+
+cut -f 3 tophits22.txt > explore_hits.txt
+sed -i 's/chr//g' explore_hits.txt
+cut -d ':' -f 1,2 explore_hits.txt > explore_hits2.txt
+
+# Updates - server did not work
+```
+
 ```{r gtex}
 
 gtex <- read.csv(file = "gtex.csv")
-
 gtex <- drop_na(gtex) %>% filter(dbSNP != "none")
-
 gtex$tissue <- rep("Lung", length(gtex$dbSNP))
-
 gtex <- gtex[1:400,]
-
 write.csv(gtex, file = "gtex_lung.csv", row.names = F, quote = F)
 
 ```
-
