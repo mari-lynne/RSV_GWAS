@@ -33,7 +33,6 @@ rm(expressionSetRma)
 
 dims(data)
 # Data = 573 samples
-# Data1 = 1107 samples
 
 # Extract data from eset
 samples <- sampleNames(data)
@@ -45,54 +44,29 @@ fData <- clean_names(data@featureData@data)
 exprs <- as.data.frame(data@assayData$exprs)
 
 
-# Check IDs --------------------------------------------------------------------
-gwas <- read.csv(file = "~/RSV/data/meta/current_metadata.csv")
+# GWAS data set up  --------------------------------------------------------------------
 
-pData <- setDT(pData, keep.rownames = TRUE)[]
-gwas <- gwas %>% drop_na(Geno_ID)
+# Assoc log file:
+# 314 samples (RESV cases) RSV_Oxford_nosib
+# Covar/metadata in pca_covar2.txt
+
+gwas <- # read.csv(file = "~/RSV/data/meta/current_metadata.csv")
+gwas <- gwas %>% drop_na(Geno_ID) # Filtering samples that don't have a genotyping ID
 gwas <- clean_names(gwas)
 
 
-# Check annotation file --------------------------------------------------------
 
-annot <- read.csv(file = "Annotation3.csv")
-annot <- clean_names(annot)
-
-
-gwas <-
-  dplyr::rename(gwas, subject_id = full_i_ds)
-
-
-test <- left_join(gwas, annot, by = "subject_id")
-
-#Do need to fix, resceu ID, subject_ID has array names mid way thru
-write.table(annot, file = "samples.txt", row.names = F)
-system(awk '{print $2}' samples.txt |cut -d "-" -f1,2 |sed -e 's/"//g'> fullIDs.txt)
-
-IDs <- read.csv(file = "fullIDs.txt")
-
-names(IDs) <- c("subject_id")
-
-annot <- annot[,-2]
-annot <- cbind(annot,IDs)
-rm(IDs)
-
-annot <- left_join(gwas,annot, by = "subject_id")
-#rows only in x 97 > rows only in y(  1), > matched rows     521 
-rmdp(test)
-#filter data after DGE analysis
-
-# DGE data set-up --------------------------------------------------------------
+# START DGE data set-up --------------------------------------------------------------
 
 exprs <- as.data.frame(data)
 pData <- clean_names(data@phenoData@data)
 fData <- clean_names(data@featureData@data)
+pData <- setDT(pData, keep.rownames = TRUE)[]
 
 # pData has visit data, but no other meta data, get by left joining to GWAS
 # Need to add IDs
 
-pData <- 
-  cbind(pData, samples$row.names.samples.)
+# pData <- cbind(pData, samples$row.names.samples) ?
 
 gwas <-
   dplyr::rename(gwas, subject_id = full_i_ds)

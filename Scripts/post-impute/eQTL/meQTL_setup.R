@@ -23,7 +23,6 @@ library(Glimma)
 library(RColorBrewer)
 library(factoextra)
 library(ggpubr)
-library(tibble)
 library(MatrixEQTL)
 library(biomaRt)
 
@@ -98,7 +97,7 @@ dge_geno <- annot_v1[(annot_v1$subject_id %in% geno_ids$subject_id),] # 277 samp
 v1_exprs <- v1_exprs[(row.names(v1_exprs) %in% dge_geno$name),]
 v1_pheno <- v1[(v1$rn %in% dge_geno$name),]
 
-# Also have to remove/keep samples in plink that are in both data sets to eventuallt get genotyping info
+# Also have to remove/keep samples in plink that are in both data sets to eventually get genotyping info
 
 geno_dge <- geno_ids[(geno_ids$subject_id %in% dge_geno$subject_id),] #293? must have duplicates
 # remove duplicates
@@ -107,10 +106,15 @@ geno_dge <- geno_dge[(stri_duplicated(geno_dge$subject_id) == FALSE),]
 # Keep these samples in plink
 geno.keep <- assoc[(assoc$V2 %in% geno_dge$Geno_ID),2]
 write.table(geno.keep, file = "~/RSV/data/meta/dge_v1_samples.txt", sep = "\t", quote = F, col.names = F, row.names = F)
-system("plink2 --bfile ~/RSV/data/post-imp/Assoc/RSV_Oxford_nosib --keep ~/RSV/data/meta/dge_v1_samples.txt --make-bed --out ~/RSV/data/post-imp/Assoc/RSV_dge")
+
+# Filter for top SNPs
+top <- fread("~/RSV/data/post-imp/Assoc/tophits22.txt")
+snp.keep <- top$SNP
+write.table(snp.keep, file = "~/RSV/data/transcriptomics/snp_keep.txt", sep = "\t", quote = F, col.names = F, row.names = F)
+
+system("plink2 --bfile ~/RSV/data/post-imp/Assoc/RSV_Oxford_nosib --extract ~/RSV/data/transcriptomics/snp_keep.txt --keep ~/RSV/data/meta/dge_v1_samples.txt --make-bed --out ~/RSV/data/transcriptomics/RSV_dge")
 
 save.image(file = "meqtl.RData")
-
 
 # Prepare genotyping data/snp location data ------------------------------------
 
@@ -118,12 +122,15 @@ save.image(file = "meqtl.RData")
 # Open and run in terminal in ~/RSV/data/post-imp/Assoc/
 
 # #Transpose table so SNPs are rows, participants are columns
-# plink --data RSV_dge --allow-no-sex --recode A-transpose --out RSV_dge_2
+# plink --bfile RSV_dge --allow-no-sex --recode oxford --out RSV_dge
+# plink --data RSV_dge --allow-no-sex --recode A-transpose --out RSV_dge
 # 
 # # CHR	SNP	(C)M	POS	COUNTED	ALT
-# cat RSV_dge2.traw | cut -f2,7- > geno_file.txt #cut relevant data from new file
+# cat RSV_dge.traw | cut -f2,7- > geno_file.txt
 
-# awk '{print $2, $1, $4}' RSV_dge2.traw > snp_loc.txt
+#cut relevant data from new file
+
+# awk '{print $2, $1, $4}' RSV_dge.traw > snp_loc.txt
 
 
 # Get gene location data -------------------------------------------------------
@@ -194,7 +201,7 @@ write.table(covar, file = "covar_eqtl.txt", sep = "\t", quote = F, col.names = T
 
 # Check first 3 file column order
 
-geno <- fread("~/RSV/data/post-imp/Assoc/geno_file")
+geno <- fread("~/RSV/data/transcriptomics/geno_file.txt")
 covar <- fread("~/RSV/data/transcriptomics/covar_eqtl.txt")
 exprs <- fread("exprs.txt")
 
@@ -208,10 +215,10 @@ names.use <- names(geno)
 exprs <- exprs[, ..names.use]
 covar <- covar[, ..names.use]
 
-#write.table(geno, file = "eQTL/geno.txt", sep = "\t", quote = F, col.names = T, row.names = F)
+write.table(geno, file = "eQTL/geno.txt", sep = "\t", quote = F, col.names = T, row.names = F)
 write.table(exprs, file = "eQTL/exprs.txt", sep = "\t", quote = F, col.names = T, row.names = F)
 write.table(covar, file = "eQTL/covar_eqtl.txt", sep = "\t", quote = F, col.names = T, row.names = F)
 
-
+save.image(file = "geno.RData")
 
 
