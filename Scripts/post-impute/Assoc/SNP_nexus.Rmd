@@ -32,7 +32,7 @@ library(openxlsx)
 Upload data to SNP nexus to get genome annotation <https://www.snp-nexus.org/v4/>
 
 ```{r format Nexus snp list}
-tophits <- fread("tophits22.txt")
+tophits <- fread("tophits_new2.txt")
 nexus <- select(tophits, CHR, BP, REF, ALT)
 nexus <- mutate(nexus, strand = rep(1, length(nexus$CHR)))
 nexus <- mutate(nexus, Type = rep("Chromosome", length(nexus$CHR)))
@@ -41,7 +41,7 @@ nexus <- select(nexus, Type, CHR, BP, REF, ALT, strand)
 names(nexus) <-
   c("Type", "Id", "Position", "Alelle1", "Allele2", "Strand")
 
-write.table(nexus, "nexus/nexus22.txt", row.names = F, col.names = F, quote = F, sep = " ")
+write.table(nexus, "nexus_new2.txt", row.names = F, col.names = F, quote = F, sep = " ")
 #Then need to find what these snps are in LD with
 ```
 

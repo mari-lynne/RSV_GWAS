@@ -14,12 +14,6 @@ library(janitor)
 library(stringr)
 library(RColorBrewer)
 
-# Manhattan plots
-
-# Features
-
-# Pathway
-
 
 # Feature pie charts -----------------------------------------------------------
 
@@ -136,14 +130,6 @@ main$feature_type[is.na(main$feature_type)] <- "N/A"
 
 levels(freq$type) <- gsub("^Non-coding$", "No-gene", levels(freq$type))
 
-
-
-"#FCCDE5" "#B3DE69" "#8DD3C7" "#FDB462" "#80B1D3" "#FB8072" "#BEBADA" "#FFFFB3" 
-
-snp_gene
-
-snp_ft
-
 # Manhattan --------------------------------------------------------------------
 
 # Steps:
@@ -205,6 +191,20 @@ manhattan(assoc2, snp = "SNP", ylim = c(0, 8),
           main = "RSV Severity GWAS")
 
 dev.off()
+
+
+# Q-Q plot ---------------------------------------------------------------------
+
+# Also check lamda/GIF 
+
+qq2(assoc$P, main = "Q-Q plot of RSV GWAS p-values", col = "darkolivegreen4", xlim = c(0,7))
+
+vignetes("qqman")
+
+
+
+# should be in log file
+
 
 # Prep Gtex data ---------------------------------------------------
 
