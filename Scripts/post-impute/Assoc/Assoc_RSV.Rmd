@@ -6,17 +6,19 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
+
 ```
+
 ### Aims:
 
-- Using imputed and cleaned data, associate genome-wide SNP frequency in our cohort with RSV severity (GWAS)
-- Association analysis can be modified to also look at regions of interest (CGAS)
-- Check Q-Q plot and genomic inflation values
-- Visualise GWAS significance with manhattan plots
-- Filter and format top  hit data for downstream annotation
-
+-   Using imputed and cleaned data, associate genome-wide SNP frequency in our cohort with RSV severity (GWAS)
+-   Association analysis can be modified to also look at regions of interest (CGAS)
+-   Check Q-Q plot and genomic inflation values
+-   Visualise GWAS significance with Manhattan plots
+-   Filter and format top hit data for downstream annotation
 
 ### Association Analysis
 
@@ -26,12 +28,27 @@ knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
     <https://www.cog-genomics.org/plink/2.0/assoc>
 
 ```{bash Association Analysis}
-#mkdir -p Assoc
-plink2 --bfile RSV_Oxford_nosib --pheno pheno2.txt --pheno-name RESV_total_score --covar pca_covar2.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out nosib2
+
+plink2 --bfile RSV_Oxford_nosib \
+--pheno pheno2.txt \
+--pheno-name RESV_total_score \
+--covar pca_covar2.txt \
+--covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit \
+--covar-variance-standardize \
+--glm \
+--adjust \
+--out RSV_nosib
+
 ```
 
 ```{bash Case/Control Analysis}
-plink2 --bfile RSV_Oxford_nosib --pheno pheno2.txt --pheno-name RSV  --covar pca_covar2.txt --covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize --glm --out nosib
+plink2 --bfile RSV_Oxford_nosib \
+--pheno pheno2.txt \
+--pheno-name RSV  \
+--covar pca_covar2.txt \
+--covar-name Sex, PC1, PC2, PC3, PC4, has_pre_ex_con, baseline_age_at_visit --covar-variance-standardize \
+--glm \
+--out nosib
 ```
 
 ### Linear Regression
@@ -71,6 +88,8 @@ The significance of this relationship is then tested by calculating the T statis
 
 If the p-value that corresponds to t is less than some threshold (e.g. α = .05); then we reject the null hypothesis and conclude that there is a statistically significant relationship between the predictor variable and the response variable
 
+### RESV severity GWAS
+
 ```{r Plot Assoc Results, eval = TRUE, cache=TRUE}
 
 
@@ -82,31 +101,25 @@ gwas2 <- fread("nosib2.RESV_total_score.glm.linear")
 colnames(gwas2) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1","TEST","OBS_CT","BETA",        
                            "SE","T_STAT","P","ERRCODE")
 
+
 gwas2 <-
   filter(gwas2, TEST == "ADD")#Keep just genetic testing
 
 
 # top <- filter(gwas2, P <= 10e-5)
 
-test <- gwas2 %>% filter(P <= 10e-2) %>% select(c("CHR", "BP", "SNP", "REF", "ALT", "P"))
-
-test$SNP <- str_replace_all(test$SNP, ":", "_")
-
-
+# test <- gwas2 %>% filter(P <= 10e-2) %>% select(c("CHR", "BP", "SNP", "REF", "ALT", "P"))
+# 
+# test$SNP <- str_replace_all(test$SNP, ":", "_")
 # write.table(top, file = "gwas2.txt", quote = F, row.names= F, sep = "\t")
-
-write.table(test, file = "test.txt", quote = F, row.names= F, sep = "\t")
-
-
-# Plot Manhattan
-manhattan(gwas2, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
-
-pdf(file =(paste(plot_dir,"manhattan_RESV2.pdf",sep ="")), paper = "a4r")
-manhattan(gwas, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
-dev.off()
+#write.table(test, file = "test.txt", quote = F, row.names= F, sep = "\t")
 
 # Inspect top snps: ------------------------------------------------------------
-tophits <- filter(gwas, P < 10e-5)
+
+#realistically we would want P < 0.00005 = 5e-5
+#check notation prev was 10e-5, 
+
+tophits <- filter(gwas, P < 1e-5) # P < 0.00001
 head(tophits)
 #Write top hits file 
 write.table(tophits, file = "tophits2.txt", quote = F, row.names= F, sep = "\t")
@@ -114,6 +127,12 @@ write.table(tophits, file = "tophits2.txt", quote = F, row.names= F, sep = "\t")
 tophits2 <- filter(gwas2, P < 10e-5)
 write.table(tophits2, file = "tophits22.txt", quote = F, row.names= F, sep = "\t")
 
+
+tophits <- filter(gwas2, P < 1e-5) 
+write.table(tophits, file = "tophits_new.txt", quote = F, row.names= F, sep = "\t")
+
+tophits2 <- filter(gwas2, P < 5e-5)
+write.table(tophits2, file = "tophits_new2.txt", quote = F, row.names= F, sep = "\t")
 
 # Case control -----------------------------------------------------------------
 
@@ -127,6 +146,20 @@ case_tophits <- filter(case, P < 10e-5)
 # pdf(file =(paste(plot_dir,"manhattan_RESV.pdf",sep ="")))
 manhattan(case, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
 # Much less sig, and is not suited to reflect a linear response to infection
+
+```
+
+#### Manhattan Plots
+
+```{r}
+# Plot Manhattan
+manhattan(gwas2, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
+
+pdf(file =(paste(plot_dir,"manhattan_RESV2.pdf",sep ="")), paper = "a4r")
+manhattan(gwas, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
+dev.off()
+
+# See plotting2.R for more data viz
 
 ```
 
