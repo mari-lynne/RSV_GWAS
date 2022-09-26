@@ -177,17 +177,17 @@ write.table(v1_exprs, file = "exprs.txt", sep = "\t", quote = F, col.names = T, 
 # Update covar data ------------------------------------------------------------
 
 covar <- fread("~/RSV/data/post-imp/Assoc/pca_covar2.txt")
-covar <- covar[(covar$IID %in% link$Geno_ID), ]
+covar <- covar[(covar$IID %in% link$Geno_ID),]
 
-covar <- covar[, c(2:6,13:15)]
+covar <- covar[, c(2:6, 13:15)]
 
 # Recode Sex
 covar$Sex <- ifelse(covar$Sex == "Male", 1,
                     ifelse(covar$Sex == "Female", 2, NA))
 
 covar <-  t(covar)
-colnames(covar) <- covar[1,]
-covar <- covar[-1,]
+colnames(covar) <- covar[1, ]
+covar <- covar[-1, ]
 write.table(covar, file = "covar_eqtl.txt", sep = "\t", quote = F, col.names = T, row.names = T)
 
 
