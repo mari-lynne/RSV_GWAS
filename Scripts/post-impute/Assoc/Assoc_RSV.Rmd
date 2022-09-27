@@ -10,6 +10,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 knitr::opts_knit$set(root.dir = '~/RSV/data/post-imp/Assoc')
 
+library(data.table)
+library(ggplot2)
+library(ggpubr)
+library(qqman)
+library(tidylog)
+
 ```
 
 ### Aims:
@@ -101,12 +107,10 @@ gwas2 <- fread("nosib2.RESV_total_score.glm.linear")
 colnames(gwas2) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1","TEST","OBS_CT","BETA",        
                            "SE","T_STAT","P","ERRCODE")
 gwas2 <-
-  filter(gwas2, TEST == "ADD")#Keep just genetic testing
+  filter(gwas2, TEST == "ADD") %>% # Keep just genetic testing
+  select(-ERRCODE)
 
-
-# top <- filter(gwas2, P <= 10e-5)
-# test$SNP <- str_replace_all(test$SNP, ":", "_")
-# write.table(top, file = "gwas2.txt", quote = F, row.names= F, sep = "\t")
+write.table(gwas2, file = "gwas22.txt", quote = F, row.names= F, sep = "\t")
 
 
 # Inspect top snps: ------------------------------------------------------------
@@ -120,6 +124,9 @@ write.table(tophits2, file = "tophits22.txt", quote = F, row.names= F, sep = "\t
 tophits2 <- filter(gwas2, P < 5e-5)
 write.table(tophits2, file = "tophits_new2.txt", quote = F, row.names= F, sep = "\t")
 
+```
+
+```{r Case control}
 # Case control -----------------------------------------------------------------
 
 case <- fread("nosib.RSV.glm.logistic.hybrid")
@@ -128,11 +135,7 @@ names(case) <- c("CHR", "BP", "SNP", "REF", "ALT", "A1", "FIRTH","TEST","OBS_CT"
 
 case <- filter(case, TEST == "ADD") 
 case_tophits <- filter(case, P < 10e-5)
-
-# pdf(file =(paste(plot_dir,"manhattan_RESV.pdf",sep ="")))
-manhattan(case, ylim = c(0, 8), cex = 0.6, cex.axis = 0.9, genomewideline = F, col = c("mediumseagreen", "darkolivegreen4"))
 # Much less sig, and is not suited to reflect a linear response to infection
-
 ```
 
 #### Manhattan Plots
