@@ -95,7 +95,7 @@ snp_ft <-
 snp_ft
 
 
-#SNP genes
+# SNP genes
 freq <-
   setDT(main)[, .N, keyby = type]
 
