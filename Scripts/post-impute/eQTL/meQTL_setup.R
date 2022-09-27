@@ -84,7 +84,8 @@ annot_v1 <- annot[(annot$name %in% v1_ids),]
 geno_ids <- fread("~/RSV/data/meta/current_metadata.csv")
 geno_ids <- dplyr::rename(geno_ids, subject_id = fullIDs)
 
-geno_ids <- geno_ids[(geno_ids$Geno_ID %in% assoc$V2),] # Just get assoc samples from fam file
+# Just get assoc samples from fam file
+geno_ids <- geno_ids[(geno_ids$Geno_ID %in% assoc$V2),] 
 
 
 # Filter DGE data by assoc data -------------------------------------------------
@@ -109,10 +110,14 @@ write.table(geno.keep, file = "~/RSV/data/meta/dge_v1_samples.txt", sep = "\t", 
 
 # Filter for top SNPs
 top <- fread("~/RSV/data/post-imp/Assoc/tophits22.txt")
-snp.keep <- top$SNP
-write.table(snp.keep, file = "~/RSV/data/transcriptomics/snp_keep.txt", sep = "\t", quote = F, col.names = F, row.names = F)
 
-system("plink2 --bfile ~/RSV/data/post-imp/Assoc/RSV_Oxford_nosib --extract ~/RSV/data/transcriptomics/snp_keep.txt --keep ~/RSV/data/meta/dge_v1_samples.txt --make-bed --out ~/RSV/data/transcriptomics/RSV_dge")
+#more stringent p threshold
+top2 <- filter(top, P <=1e-5)
+
+snp.keep <- top2$SNP
+write.table(snp.keep, file = "~/RSV/data/transcriptomics/snp_keep2.txt", sep = "\t", quote = F, col.names = F, row.names = F)
+
+system("plink2 --bfile ~/RSV/data/post-imp/Assoc/RSV_Oxford_nosib --extract ~/RSV/data/transcriptomics/snp_keep2.txt --keep ~/RSV/data/meta/dge_v1_samples.txt --make-bed --out ~/RSV/data/transcriptomics/RSV_dge")
 
 save.image(file = "meqtl.RData")
 
@@ -219,6 +224,6 @@ write.table(geno, file = "eQTL/geno.txt", sep = "\t", quote = F, col.names = T, 
 write.table(exprs, file = "eQTL/exprs.txt", sep = "\t", quote = F, col.names = T, row.names = F)
 write.table(covar, file = "eQTL/covar_eqtl.txt", sep = "\t", quote = F, col.names = T, row.names = F)
 
-save.image(file = "geno.RData")
+save.image(file = "geno2.RData")
 
 
